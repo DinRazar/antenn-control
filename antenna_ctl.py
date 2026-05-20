@@ -138,7 +138,7 @@ def verify_frame(frame):
 
 def build_frame(payload):
     payload = ensure_text(payload)
-    return '$' + payload + '*' + calc_checksum(payload) + '\r\n'
+    return '$' + payload + '*hh\r\n'
 
 
 def split_fields(frame):
