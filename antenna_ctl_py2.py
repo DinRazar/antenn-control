@@ -1,18 +1,27 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 import sys
+import os
 import socket
 import time
+import threading
+import subprocess
+import tempfile
 
 try:
     import serial
 except ImportError:
     serial = None
 
-DEFAULT_TCP_TIMEOUT = 1.0
-DEFAULT_SERIAL_TIMEOUT = 0.3
-DEFAULT_RETRIES = 3
+DEFAULT_TCP_TIMEOUT = 0.2
+DEFAULT_SERIAL_TIMEOUT = 0.2
 DEFAULT_DELAY = 0.1
+LOG_NAME = 'antenna_monitor.log'
+
+try:
+    input_func = raw_input
+except NameError:
+    input_func = input
 
 STATUS_MAP = {
     17: 'reset starting',
@@ -94,30 +103,15 @@ WARNING_BITS = [
 ]
 
 
-def is_unicode(value):
-    try:
-        return isinstance(value, unicode)
-    except NameError:
-        return False
-
-
 def ensure_text(value):
     if value is None:
         return ''
-    try:
-        if isinstance(value, str):
-            return value
-    except Exception:
-        pass
-    if is_unicode(value):
+    if isinstance(value, bytes):
         try:
-            return value.encode('ascii', 'ignore')
+            return value.decode('ascii', 'ignore')
         except Exception:
-            return value.encode('latin1', 'ignore')
-    try:
-        return str(value)
-    except Exception:
-        return ''
+            return value.decode('latin1', 'ignore')
+    return value
 
 
 def calc_checksum(payload):
@@ -126,6 +120,11 @@ def calc_checksum(payload):
     for ch in payload:
         x ^= ord(ch)
     return '%02x' % x
+
+
+def build_frame(payload):
+    payload = ensure_text(payload)
+    return '$' + payload + '*' + calc_checksum(payload) + '\r\n'
 
 
 def verify_frame(frame):
@@ -147,9 +146,20 @@ def verify_frame(frame):
     return True, payload
 
 
-def build_frame(payload):
-    payload = ensure_text(payload)
-    return '$' + payload + '*' + calc_checksum(payload) + '\r\n'
+def split_frames(blob):
+    blob = ensure_text(blob)
+    out = []
+    if not blob:
+        return out
+    blob = blob.replace('\r\n', '\n').replace('\r', '\n')
+    for line in blob.split('\n'):
+        line = line.strip()
+        if not line:
+            continue
+        if '$' in line:
+            line = line[line.find('$'):]
+        out.append(line)
+    return out
 
 
 def split_fields(frame):
@@ -228,21 +238,33 @@ def format_show(frame):
     return '\n'.join(lines)
 
 
+def ask(prompt, default=None):
+    if default is None:
+        text = input_func(prompt + ': ')
+    else:
+        text = input_func('%s [%s]: ' % (prompt, default))
+        if not text.strip():
+            text = str(default)
+    return text.strip()
+
+
 class TcpTransport(object):
     def __init__(self, host, port, timeout):
-        self.host = host
-        self.port = int(port)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.settimeout(timeout)
-        self.sock.connect((host, self.port))
+        self.sock.connect((host, int(port)))
 
-    def send_and_recv(self, frame):
-        data = ensure_text(frame)
-        self.sock.sendall(data)
+    def write_frame(self, frame):
+        self.sock.sendall(frame.encode('ascii'))
+
+    def read_chunk(self):
         try:
-            return ensure_text(self.sock.recv(4096))
+            data = self.sock.recv(4096)
         except socket.timeout:
             return ''
+        if not data:
+            return ''
+        return ensure_text(data)
 
     def close(self):
         try:
@@ -257,10 +279,19 @@ class SerialTransport(object):
             raise RuntimeError('pyserial is not installed')
         self.ser = serial.Serial(dev, baudrate=int(baud), bytesize=8, parity='N', stopbits=1, timeout=timeout)
 
-    def send_and_recv(self, frame):
-        data = ensure_text(frame)
-        self.ser.write(data)
-        time.sleep(DEFAULT_DELAY)
+    def write_frame(self, frame):
+        self.ser.write(frame.encode('ascii'))
+
+    def read_chunk(self):
+        try:
+            waiting = self.ser.inWaiting()
+        except Exception:
+            waiting = 0
+        if waiting > 0:
+            try:
+                return ensure_text(self.ser.read(waiting))
+            except Exception:
+                return ''
         try:
             return ensure_text(self.ser.read(4096))
         except Exception:
@@ -273,45 +304,124 @@ class SerialTransport(object):
             pass
 
 
-def ask(prompt, default):
-    if default is None:
-        text = raw_input(prompt + ': ')
-    else:
-        text = raw_input('%s [%s]: ' % (prompt, default))
-        if not text.strip():
-            text = str(default)
-    return text.strip()
+class MonitorLog(object):
+    def __init__(self, path):
+        self.path = path
+        self.lock = threading.Lock()
+        fp = open(self.path, 'a')
+        fp.write('\n===== session %s =====\n' % time.strftime('%Y-%m-%d %H:%M:%S'))
+        fp.close()
+
+    def write(self, text):
+        self.lock.acquire()
+        try:
+            fp = open(self.path, 'a')
+            fp.write(text)
+            fp.flush()
+            fp.close()
+        finally:
+            self.lock.release()
 
 
-def send_with_retry(tr, payload, retries):
-    frame = build_frame(payload)
-    sys.stdout.write('\nSEND: %r\n' % frame)
-    sys.stdout.flush()
-    attempt = 1
-    while attempt <= retries:
-        reply = tr.send_and_recv(frame)
-        if reply:
-            sys.stdout.write('RECV: %r\n' % reply)
-            sys.stdout.flush()
-            return reply
-        sys.stdout.write('No response, retry %d/%d\n' % (attempt, retries))
-        sys.stdout.flush()
-        time.sleep(DEFAULT_DELAY)
-        attempt += 1
-    return ''
+class AntennaSession(object):
+    def __init__(self, transport, logger):
+        self.transport = transport
+        self.logger = logger
+        self.stop_event = threading.Event()
+        self.write_lock = threading.Lock()
+        self.buffer = ''
+        self.reader = threading.Thread(target=self.reader_loop)
+        self.reader.setDaemon(True)
+
+    def start(self):
+        self.reader.start()
+
+    def close(self):
+        self.stop_event.set()
+        time.sleep(0.1)
+        self.transport.close()
+
+    def send_payload(self, payload):
+        frame = build_frame(payload)
+        self.send_frame(frame)
+        return frame
+
+    def send_frame(self, frame):
+        self.write_lock.acquire()
+        try:
+            self.transport.write_frame(frame)
+        finally:
+            self.write_lock.release()
+        self.logger.write('[TX] %s %s' % (time.strftime('%H:%M:%S'), frame))
+
+    def reader_loop(self):
+        while not self.stop_event.is_set():
+            chunk = self.transport.read_chunk()
+            if not chunk:
+                time.sleep(0.05)
+                continue
+            self.buffer += ensure_text(chunk)
+            self.process_buffer()
+
+    def process_buffer(self):
+        data = self.buffer.replace('\r\n', '\n').replace('\r', '\n')
+        if '\n' not in data:
+            self.buffer = data
+            return
+        parts = data.split('\n')
+        self.buffer = parts[-1]
+        for item in parts[:-1]:
+            line = item.strip()
+            if not line:
+                continue
+            if '$' in line:
+                line = line[line.find('$'):]
+            ok, info = verify_frame(line)
+            if ok:
+                self.logger.write('[RX] %s %s\n' % (time.strftime('%H:%M:%S'), line))
+            else:
+                self.logger.write('[RX] %s %s\n' % (time.strftime('%H:%M:%S'), line))
+                self.logger.write('[WARN] %s %s\n' % (time.strftime('%H:%M:%S'), info))
+
+
+def open_monitor_terminal(log_path):
+    shell_cmd = 'echo Monitor file: %s; echo; tail -f %s' % (log_path, log_path)
+    candidates = [
+        ['x-terminal-emulator', '-e', 'sh', '-c', shell_cmd],
+        ['gnome-terminal', '--', 'sh', '-c', shell_cmd],
+        ['xfce4-terminal', '-e', 'sh -c "%s"' % shell_cmd],
+        ['xterm', '-e', 'sh', '-c', shell_cmd],
+    ]
+    for candidate in candidates:
+        try:
+            return subprocess.Popen(candidate)
+        except Exception:
+            pass
+    return None
+
+
+def build_transport(mode, args):
+    if mode == 'tcp':
+        return TcpTransport(args[0], int(args[1]), DEFAULT_TCP_TIMEOUT)
+    if mode == 'serial':
+        baud = 38400
+        if len(args) > 1:
+            baud = int(args[1])
+        return SerialTransport(args[0], baud, DEFAULT_SERIAL_TIMEOUT)
+    raise RuntimeError('Unknown mode: %s' % mode)
 
 
 def menu():
     print('')
-    print('1 - Query state')
-    print('2 - Stop')
-    print('3 - Reset')
-    print('4 - Search/Aiming')
-    print('5 - Stow')
-    print('6 - Manual speed mode')
-    print('7 - Manual position mode')
-    print('8 - Get satellite params')
-    print('9 - Set satellite params')
+    print('1  - Query state')
+    print('2  - Stop')
+    print('3  - Reset')
+    print('4  - Search/Aiming')
+    print('5  - Stow')
+    print('6  - Manual speed mode')
+    print('7  - Manual position mode')
+    print('8  - Get satellite params')
+    print('9  - Set satellite params')
     print('10 - Get local position')
     print('11 - Set local position')
     print('12 - Get receiver type')
@@ -322,124 +432,130 @@ def menu():
     print('17 - Set DVB LO/magnification')
     print('18 - Raw payload')
     print('19 - Checksum calculator')
-    print('0 - Exit')
+    print('20 - Raw full frame')
+    print('21 - Show monitor log path')
+    print('22 - Parse one show frame manually')
+    print('0  - Exit')
+
+
+def build_payload_by_choice(choice):
+    if choice == '1':
+        return 'cmd,get show,'
+    elif choice == '2':
+        return 'cmd,stop,'
+    elif choice == '3':
+        return 'cmd,reset,'
+    elif choice == '4':
+        return 'cmd,search,'
+    elif choice == '5':
+        return 'cmd,stow,'
+    elif choice == '6':
+        adj = ask('Adjusting (1..6)', '1')
+        speed = ask('Speed (0.00..6.00)', '3.00')
+        return 'cmd,manual,%s,%s,' % (adj, speed)
+    elif choice == '7':
+        az = ask('Azimuth', '180.00')
+        el = ask('Elevation', '21.50')
+        pol = ask('Polarization', '-90.00')
+        return 'cmd,dir,%s,%s,%s,' % (az, el, pol)
+    elif choice == '8':
+        return 'cmd,get sat,'
+    elif choice == '9':
+        sat = ask('Satellite name', 'Sino5')
+        cf = ask('Central frequency MHz', '12260.00')
+        carrier = ask('Carrier frequency MHz', '0')
+        rate = ask('Carrier rate Kbaud', '0')
+        lon = ask('Satellite longitude', '110.50')
+        pol = ask('Polarization 0/1', '1')
+        lock = ask('Lock limit V', '5.00')
+        return 'cmd,sat,%s,%s,%s,%s,%s,%s,%s,' % (sat, cf, carrier, rate, lon, pol, lock)
+    elif choice == '10':
+        return 'cmd,get place,'
+    elif choice == '11':
+        lon = ask('Longitude', '108.90')
+        lat = ask('Latitude', '34.10')
+        head = ask('Heading (single space to keep current)', '180.04')
+        return 'cmd,place,%s,%s,%s,' % (lon, lat, head)
+    elif choice == '12':
+        return 'cmd,get rec type,'
+    elif choice == '13':
+        rtype = ask('Receiver type beacon/dvb', 'beacon')
+        return 'cmd,set rec,%s,' % rtype
+    elif choice == '14':
+        return 'cmd,get beacon,'
+    elif choice == '15':
+        lo = ask('Local oscillator MHz', '11300')
+        mag = ask('Magnification', '1.0')
+        return 'cmd,set beacon,%s,%s,' % (lo, mag)
+    elif choice == '16':
+        return 'cmd,get dvb,'
+    elif choice == '17':
+        lo = ask('Local oscillator MHz', '11300')
+        mag = ask('Magnification', '1.0')
+        return 'cmd,set dvb,%s,%s,' % (lo, mag)
+    elif choice == '18':
+        return ask('Payload without leading $ and without *hh')
+    return None
 
 
 def main():
-    if len(sys.argv) < 2:
+    if len(sys.argv) < 3:
         print('Usage:')
-        print('  python antenna_ctl_py2.py tcp 192.168.1.1 8899')
-        print('  python antenna_ctl_py2.py serial /dev/ttyUSB0 38400')
+        print('  python antenna_single_link_dual_terminal.py tcp 192.168.1.1 8899')
+        print('  python antenna_single_link_dual_terminal.py serial /dev/ttyUSB0 38400')
         return 1
 
     mode = sys.argv[1].lower()
-    retries = DEFAULT_RETRIES
+    args = sys.argv[2:]
+    transport = build_transport(mode, args)
+    log_path = os.path.join(tempfile.gettempdir(), LOG_NAME)
+    logger = MonitorLog(log_path)
+    session = AntennaSession(transport, logger)
+    session.start()
 
-    if mode == 'tcp':
-        if len(sys.argv) < 4:
-            print('Need host and port')
-            return 1
-        tr = TcpTransport(sys.argv[2], int(sys.argv[3]), DEFAULT_TCP_TIMEOUT)
-    elif mode == 'serial':
-        if len(sys.argv) < 3:
-            print('Need serial device')
-            return 1
-        baud = 38400
-        if len(sys.argv) >= 4:
-            baud = int(sys.argv[3])
-        tr = SerialTransport(sys.argv[2], baud, DEFAULT_SERIAL_TIMEOUT)
-    else:
-        print('Unknown mode: %s' % mode)
-        return 1
+    proc = open_monitor_terminal(log_path)
+    print('Single connection mode is active.')
+    print('Monitor log: %s' % log_path)
+    if proc is None:
+        print('Second terminal was not opened automatically.')
+        print('Open it manually and run: tail -f %s' % log_path)
 
     try:
         while True:
             menu()
-            choice = ask('Select', None)
-            payload = None
-
+            choice = ask('Select')
             if choice == '0':
                 break
-            elif choice == '1':
-                payload = 'cmd,get show,'
-            elif choice == '2':
-                payload = 'cmd,stop,'
-            elif choice == '3':
-                payload = 'cmd,reset,'
-            elif choice == '4':
-                payload = 'cmd,search,'
-            elif choice == '5':
-                payload = 'cmd,stow,'
-            elif choice == '6':
-                adj = ask('Adjusting (1..6)', None)
-                speed = ask('Speed', '3.00')
-                payload = 'cmd,manual,%s,%s' % (adj, speed)
-            elif choice == '7':
-                az = ask('Azimuth', '180.00')
-                el = ask('Elevation', '21.50')
-                pol = ask('Polarization', '-90.00')
-                payload = 'cmd,dir,%s,%s,%s,' % (az, el, pol)
-            elif choice == '8':
-                payload = 'cmd,get sat,'
-            elif choice == '9':
-                sat = ask('Satellite name', 'Sino5')
-                cf = ask('Central frequency MHz', '12260.00')
-                carrier = ask('Carrier frequency MHz', '0')
-                rate = ask('Carrier rate Kbaud', '0')
-                lon = ask('Satellite longitude', '110.50')
-                pol = ask('Polarization 0/1', '1')
-                lock = ask('Lock limit V', '5.00')
-                payload = 'cmd,sat,%s,%s,%s,%s,%s,%s,%s,' % (sat, cf, carrier, rate, lon, pol, lock)
-            elif choice == '10':
-                payload = 'cmd,get place,'
-            elif choice == '11':
-                lon = ask('Longitude', '108.90')
-                lat = ask('Latitude', '34.10')
-                head = ask('Heading (single space to keep current)', '180.04')
-                payload = 'cmd,place,%s,%s,%s,' % (lon, lat, head)
-            elif choice == '12':
-                payload = 'cmd,get rec type,'
-            elif choice == '13':
-                rtype = ask('Receiver type beacon/dvb', 'beacon')
-                payload = 'cmd,set rec,%s,' % rtype
-            elif choice == '14':
-                payload = 'cmd,get beacon,'
-            elif choice == '15':
-                lo = ask('Local oscillator MHz', '11300')
-                mag = ask('Magnification', '1.0')
-                payload = 'cmd,set beacon,%s,%s,' % (lo, mag)
-            elif choice == '16':
-                payload = 'cmd,get dvb,'
-            elif choice == '17':
-                lo = ask('Local oscillator MHz', '11300')
-                mag = ask('Magnification', '1.0')
-                payload = 'cmd,set dvb,%s,%s,' % (lo, mag)
-            elif choice == '18':
-                payload = ask('Payload without leading $ and without *hh', None)
-            elif choice == '19':
-                raw = ask('Payload for checksum', None)
+            if choice == '19':
+                raw = ask('Payload for checksum')
                 print('checksum = %s' % calc_checksum(raw))
-                print('frame    = %r' % build_frame(raw))
+                print('frame = %r' % build_frame(raw))
                 continue
-            else:
+            if choice == '20':
+                frame = ask('Full frame with $ and *hh')
+                if not frame.endswith('\r\n'):
+                    frame = frame + '\r\n'
+                print('SEND FRAME: %r' % frame)
+                session.send_frame(frame)
+                time.sleep(DEFAULT_DELAY)
+                continue
+            if choice == '21':
+                print('Monitor log path: %s' % log_path)
+                continue
+            if choice == '22':
+                frame = ask('Paste full $show frame')
+                print(format_show(frame))
+                continue
+            payload = build_payload_by_choice(choice)
+            if payload is None:
                 print('Unknown selection')
                 continue
-
-            reply = send_with_retry(tr, payload, retries)
-            if not reply:
-                print('No response after retries')
-                continue
-
-            ok, parsed = verify_frame(reply)
-            if ok:
-                print('Checksum OK')
-                if reply.startswith('$show,'):
-                    print('--- parsed show ---')
-                    print(format_show(reply))
-            else:
-                print('Reply verify warning: %s' % parsed)
+            print('SEND PAYLOAD: %s' % payload)
+            print('SEND FRAME:   %r' % build_frame(payload))
+            session.send_payload(payload)
+            time.sleep(DEFAULT_DELAY)
     finally:
-        tr.close()
+        session.close()
     return 0
 
 
