@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antenna Control & Monitor</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <script src="/static/script.js" defer></script>
+</head>
+<body>
+<div class="container">
+    <h1>📡 Antenna Control & Monitor (Real‑time)</h1>
+
+    <div class="control-panel">
+        <h2>Управление</h2>
+        <div class="button-group">
+            <button onclick="sendCommand('cmd,stop,')">⏹️ Stop</button>
+            <button onclick="sendCommand('cmd,reset,')">🔄 Reset</button>
+            <button onclick="sendCommand('cmd,search,')">🔍 Search/Aiming</button>
+            <button onclick="sendCommand('cmd,stow,')">📦 Stow</button>
+        </div>
+        <div class="button-group">
+            <button class="warning" onclick="manualSpeed()">⚙️ Manual speed</button>
+            <button class="manual" onclick="manualPosition()">🎯 Manual position</button>
+        </div>
+        <div class="input-group">
+            <label>Азимут:</label>
+            <input type="number" step="0.01" id="az" placeholder="0.00">
+            <label>Угол места:</label>
+            <input type="number" step="0.01" id="el" placeholder="0.00">
+            <label>Поляризация:</label>
+            <input type="number" step="0.01" id="pol" placeholder="0.00">
+            <button onclick="setPosition()">Установить</button>
+        </div>
+        <div class="input-group">
+            <label>Скорость (0..6):</label>
+            <input type="number" step="0.1" id="speed" value="3.0">
+            <label>Напр. (1..6):</label>
+            <input type="number" id="adj" value="1">
+            <button onclick="setSpeed()">Уст. скорость</button>
+        </div>
+        <div id="cmdStatus" class="status-msg"></div>
+    </div>
+
+    <h2>Телеметрия</h2>
+    <div class="grid">
+        <div class="card"><b>Азимут (тек)</b><br><span id="cur_az" class="value">--</span><div class="unit">°</div></div>
+        <div class="card"><b>Азимут (цель)</b><br><span id="tar_az" class="value">--</span><div class="unit">°</div></div>
+        <div class="card"><b>Угол места (тек)</b><br><span id="cur_el" class="value">--</span><div class="unit">°</div></div>
+        <div class="card"><b>Угол места (цель)</b><br><span id="tar_el" class="value">--</span><div class="unit">°</div></div>
+        <div class="card"><b>Поляризация (тек)</b><br><span id="cur_pol" class="value">--</span><div class="unit">°</div></div>
+        <div class="card"><b>Поляризация (цель)</b><br><span id="tar_pol" class="value">--</span><div class="unit">°</div></div>
+        <div class="card"><b>Статус</b><br><span id="status" class="value">--</span></div>
+        <div class="card"><b>GPS</b><br><span id="gps" class="value">--</span></div>
+        <div class="card"><b>Долгота</b><br><span id="lon" class="value">--</span><div class="unit">°</div></div>
+        <div class="card"><b>Широта</b><br><span id="lat" class="value">--</span><div class="unit">°</div></div>
+        <div class="card"><b>AGC</b><br><span id="agc" class="value">--</span><div class="unit">В</div></div>
+        <div class="card"><b>Время</b><br><span id="time" class="value">--</span></div>
+    </div>
+</div>
+</body>
+</html>
