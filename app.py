@@ -5,10 +5,9 @@ import time
 import threading
 import socket
 from flask import Flask, render_template, request, jsonify
-from flask_socketio import SocketIO, emit
 
 # ------------------------------------------------------------
-# Классы для работы с антенной (без вычисления контрольной суммы)
+# Классы для работы с антенной (без CRC, всегда *hh)
 # ------------------------------------------------------------
 def ensure_text(value):
     if isinstance(value, bytes):
@@ -73,13 +72,11 @@ class AntennaSession:
         self.transport.close()
 
 # ------------------------------------------------------------
-# Flask + SocketIO
+# Flask приложение (без SocketIO, polling через fetch)
 # ------------------------------------------------------------
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'secret!'
-socketio = SocketIO(app, cors_allowed_origins="*")
 
-# Хранилище последних данных телеметрии
+# Хранилище последних данных
 latest_telemetry = {
     'cur_az': '--', 'tar_az': '--', 'cur_el': '--', 'tar_el': '--',
     'cur_pol': '--', 'tar_pol': '--', 'status': '--', 'gps': '--',
@@ -87,23 +84,39 @@ latest_telemetry = {
 }
 
 def parse_show(frame):
+    """Парсер, устойчивый к пустым полям (пробел или пустая строка)"""
     if not frame.startswith('$show'):
         return None
     star = frame.find('*')
     payload = frame[1:star] if star != -1 else frame[1:]
     parts = payload.split(',')
-    if len(parts) < 18:
+    if len(parts) < 14:
         return None
+    def clean(val):
+        s = val.strip() if val else ''
+        return s if s else '--'
     try:
         return {
-            'tar_az': parts[1], 'tar_el': parts[2], 'tar_pol': parts[3],
-            'cur_az': parts[4], 'cur_el': parts[5], 'cur_pol': parts[6],
-            'status': parts[7], 'heading': parts[8], 'carrier_el': parts[9],
-            'roll': parts[10], 'lon': parts[11], 'lat': parts[12],
-            'gps': parts[13], 'limit': parts[14], 'agc': parts[15],
-            'warnings': parts[16], 'time': parts[17] if len(parts) > 17 else ''
+            'tar_az': clean(parts[1]) if len(parts) > 1 else '--',
+            'tar_el': clean(parts[2]) if len(parts) > 2 else '--',
+            'tar_pol': clean(parts[3]) if len(parts) > 3 else '--',
+            'cur_az': clean(parts[4]) if len(parts) > 4 else '--',
+            'cur_el': clean(parts[5]) if len(parts) > 5 else '--',
+            'cur_pol': clean(parts[6]) if len(parts) > 6 else '--',
+            'status': clean(parts[7]) if len(parts) > 7 else '--',
+            'heading': clean(parts[8]) if len(parts) > 8 else '--',
+            'carrier_el': clean(parts[9]) if len(parts) > 9 else '--',
+            'roll': clean(parts[10]) if len(parts) > 10 else '--',
+            'lon': clean(parts[11]) if len(parts) > 11 else '--',
+            'lat': clean(parts[12]) if len(parts) > 12 else '--',
+            'gps': clean(parts[13]) if len(parts) > 13 else '--',
+            'limit': clean(parts[14]) if len(parts) > 14 else '--',
+            'agc': clean(parts[15]) if len(parts) > 15 else '--',
+            'warnings': clean(parts[16]) if len(parts) > 16 else '--',
+            'time': clean(parts[17]) if len(parts) > 17 else '--'
         }
-    except:
+    except Exception as e:
+        print(f"Parse error: {e}")
         return None
 
 def on_show_callback(raw_frame):
@@ -111,7 +124,6 @@ def on_show_callback(raw_frame):
     data = parse_show(raw_frame)
     if data:
         latest_telemetry = data
-        socketio.emit('telemetry', data)   # отправляем всем клиентам
 
 # ------------------------------------------------------------
 # Маршруты
@@ -153,7 +165,7 @@ def main():
     session = AntennaSession(transport, on_show_callback)
     print(f"Connected to antenna at {host}:{port}")
     print("Web interface: http://localhost:5000")
-    socketio.run(app, host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=5000, debug=False)
 
 if __name__ == '__main__':
     main()
