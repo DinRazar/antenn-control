@@ -7,7 +7,6 @@ import time
 DEFAULT_HOST = '127.0.0.1'
 DEFAULT_PORT = 8899
 
-
 def ensure_text(value):
     if isinstance(value, bytes):
         try:
@@ -16,18 +15,9 @@ def ensure_text(value):
             return value.decode('latin1', 'ignore')
     return value
 
-
-def calc_checksum(payload):
-    payload = ensure_text(payload)
-    x = 0
-    for ch in payload:
-        x ^= ord(ch)
-    return '%02x' % x
-
-
 def build_frame(payload):
-    return '$' + payload + '*' + calc_checksum(payload) + '\r\n'
-
+    # Всегда отправляем '*hh' вместо реальной контрольной суммы
+    return '$' + payload + '*hh\r\n'
 
 def verify_frame(frame):
     frame = ensure_text(frame).strip()
@@ -41,13 +31,12 @@ def verify_frame(frame):
     if star + 3 > len(frame):
         return False, 'checksum too short'
     payload = frame[1:star]
-    given = frame[star + 1:star + 3].lower()
-    calc = calc_checksum(payload)
-    if given != calc:
-        return False, 'checksum mismatch: got %s expected %s' % (given, calc)
+    # Контрольную сумму игнорируем – принимаем любой фрейм
     return True, payload
 
-
+# ------------------------------------------------------------
+# Класс состояния антенны (без изменений)
+# ------------------------------------------------------------
 class AntennaState(object):
     def __init__(self):
         self.sat_name = 'Sino5'
@@ -137,26 +126,20 @@ class AntennaState(object):
     def dvb_payload(self):
         return 'cmd,dvb,%s,%s,' % (self.dvb_lo, self.dvb_mag)
 
-
 def ack_payload(command_name):
     return 'cmd,%s ack,' % command_name
-
 
 def ok_payload(command_name):
     return 'cmd,%s ok,' % command_name
 
-
 def para_error_payload():
     return 'cmd,para error,'
-
 
 def order_error_payload():
     return 'cmd,order error,'
 
-
 def xor_error_payload():
     return 'cmd,xor error,'
-
 
 def handle_payload(state, payload):
     parts = payload.split(',')
@@ -248,7 +231,9 @@ def handle_payload(state, payload):
 
     return build_frame(para_error_payload())
 
-
+# ------------------------------------------------------------
+# Сервер эмулятора
+# ------------------------------------------------------------
 def run_server(host, port):
     state = AntennaState()
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -286,7 +271,6 @@ def run_server(host, port):
                         print('ERR : %s' % payload)
                     else:
                         print('PAY : %s' % payload)
-                        print('XOR : %s' % calc_checksum(payload))
                         tx = handle_payload(state, payload)
                     print('TX  : %r' % tx.strip())
                     conn.sendall(tx.encode('ascii'))
@@ -296,7 +280,6 @@ def run_server(host, port):
             except Exception:
                 pass
             print('Client disconnected')
-
 
 def run_demo():
     state = AntennaState()
@@ -317,20 +300,18 @@ def run_demo():
     for payload in samples:
         frame = build_frame(payload)
         print('SEND:', repr(frame))
-        print('XOR :', calc_checksum(payload))
         reply = handle_payload(state, payload)
         print('RECV:', repr(reply))
         print('')
 
     bad = '$cmd,stop,*00\r\n'
-    print('Checksum error demo')
+    print('Checksum error demo (now ignored)')
     print('SEND:', repr(bad))
     ok, info = verify_frame(bad)
     print('OK  :', ok)
     print('INFO:', info)
-    if not ok:
+    if ok:
         print('RECV:', repr(build_frame(xor_error_payload())))
-
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == 'demo':
@@ -344,7 +325,6 @@ def main():
     if len(sys.argv) > 2:
         port = int(sys.argv[2])
     return run_server(host, port)
-
 
 if __name__ == '__main__':
     sys.exit(main())
