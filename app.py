@@ -6,16 +6,44 @@ import threading
 import socket
 from flask import Flask, render_template, request, jsonify
 
-# ------------------------------------------------------------
-# Классы для работы с антенной (без CRC, всегда *hh)
-# ------------------------------------------------------------
+# Словарь статусов антенны (русский язык)
+
+STATUS_MAP = {
+    17: 'Развёртывание(запуск)',
+    18: 'Развёртывание (ошибка)',
+    19: 'Развёртывание (выполнен)',
+    20: 'Развёртывание (приостановлен)',
+    33: 'Складывание (запуск)',
+    34: 'Складывание (ошибка)',
+    35: 'Складывание (выполнена)',
+    36: 'Складывание (приостановлена)',
+    49: 'Наведение (запуск)',
+    50: 'Наведение (ошибка)',
+    51: 'Наведение (выполнено)',
+    52: 'Наведение (приостановлено)',
+    65: 'Калибровка компаса (запуск)',
+    66: 'Калибровка компаса (выполняется)',
+    67: 'Калибровка компаса (выполнена)',
+    68: 'Калибровка компаса (ошибка)',
+    69: 'Калибровка компаса (приостановлена)',
+    81: 'Сопровождение',
+    83: 'Сопровождение (выполнено)',
+    84: 'Сопровождение (приостановлено)',
+    97: 'Ручное управление (скорость)',
+    98: 'Ручное управление (позиция)',
+    0: 'Бездействие',
+    238: 'Перезагрузка хоста'
+}
+
+# Классы для работы с антенной 
+
 def ensure_text(value):
     if isinstance(value, bytes):
         return value.decode('ascii', 'ignore')
     return str(value) if value else ''
 
 def build_frame(payload):
-    # Всегда отправляем '*hh' – как в оригинальном скрипте
+    # Всегда отправляем '*hh' 
     return '$' + payload + '*hh\r\n'
 
 class TcpTransport:
@@ -71,16 +99,15 @@ class AntennaSession:
         self.running = False
         self.transport.close()
 
-# ------------------------------------------------------------
-# Flask приложение (без SocketIO, polling через fetch)
-# ------------------------------------------------------------
+# Flask приложение (polling через fetch)
+
 app = Flask(__name__)
 
 # Хранилище последних данных
 latest_telemetry = {
     'cur_az': '--', 'tar_az': '--', 'cur_el': '--', 'tar_el': '--',
-    'cur_pol': '--', 'tar_pol': '--', 'status': '--', 'gps': '--',
-    'lon': '--', 'lat': '--', 'agc': '--', 'time': '--'
+    'cur_pol': '--', 'tar_pol': '--', 'status': '--', 'status_code': None,
+    'gps': '--', 'lon': '--', 'lat': '--', 'agc': '--', 'time': '--'
 }
 
 def parse_show(frame):
@@ -96,6 +123,17 @@ def parse_show(frame):
         s = val.strip() if val else ''
         return s if s else '--'
     try:
+        status_raw = clean(parts[7]) if len(parts) > 7 else '--'
+        # Пытаемся преобразовать статус в число для поиска в словаре
+        status_code = None
+        status_text = status_raw
+        if status_raw != '--':
+            try:
+                status_code = int(float(status_raw))
+                status_text = STATUS_MAP.get(status_code, status_raw)
+            except:
+                status_text = status_raw
+        
         return {
             'tar_az': clean(parts[1]) if len(parts) > 1 else '--',
             'tar_el': clean(parts[2]) if len(parts) > 2 else '--',
@@ -103,7 +141,8 @@ def parse_show(frame):
             'cur_az': clean(parts[4]) if len(parts) > 4 else '--',
             'cur_el': clean(parts[5]) if len(parts) > 5 else '--',
             'cur_pol': clean(parts[6]) if len(parts) > 6 else '--',
-            'status': clean(parts[7]) if len(parts) > 7 else '--',
+            'status': status_text,              # теперь здесь текст
+            'status_code': status_code,         # сохраняем код для справки
             'heading': clean(parts[8]) if len(parts) > 8 else '--',
             'carrier_el': clean(parts[9]) if len(parts) > 9 else '--',
             'roll': clean(parts[10]) if len(parts) > 10 else '--',
@@ -125,9 +164,8 @@ def on_show_callback(raw_frame):
     if data:
         latest_telemetry = data
 
-# ------------------------------------------------------------
 # Маршруты
-# ------------------------------------------------------------
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -145,9 +183,8 @@ def send_command():
     session.send_payload(payload)
     return jsonify({'status': 'sent', 'payload': payload})
 
-# ------------------------------------------------------------
 # Запуск
-# ------------------------------------------------------------
+
 def main():
     global session
     if len(sys.argv) < 3:

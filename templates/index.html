@@ -3,25 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Antenna Control & Monitor</title>
+    <title>Antenna Control</title>
     <link rel="stylesheet" href="/static/style.css">
     <script src="/static/script.js" defer></script>
 </head>
 <body>
 <div class="container">
-    <h1>📡 Antenna Control & Monitor</h1>
+    <h1>Antenna Control</h1>
 
     <div class="control-panel">
         <h2>Управление</h2>
         <div class="button-group">
-            <button onclick="sendCommand('cmd,stop,')">⏹️ Stop</button>
-            <button onclick="sendCommand('cmd,reset,')">🔄 Reset</button>
-            <button onclick="sendCommand('cmd,search,')">🔍 Search/Aiming</button>
-            <button onclick="sendCommand('cmd,stow,')">📦 Stow</button>
+            <button onclick="sendCommand('cmd,stop,')">Стоп</button>
+            <button onclick="sendCommand('cmd,reset,')">Развернуть</button>
+            <button onclick="sendCommand('cmd,search,')">Поиск/наводка</button>
+            <button onclick="sendCommand('cmd,stow,')">Сложить</button>
         </div>
         <div class="button-group">
-            <button class="warning" onclick="manualSpeed()">⚙️ Manual speed</button>
-            <button class="manual" onclick="manualPosition()">🎯 Manual position</button>
+            <button class="warning" onclick="manualSpeed()">Ручной ввод скорости</button>
+            <button class="manual" onclick="manualPosition()">Ручной ввод позиции</button>
         </div>
         <div class="input-group">
             <label>Азимут:</label>
@@ -44,18 +44,22 @@
 
     <h2>Телеметрия</h2>
     <div class="grid">
-        <div class="card"><b>Азимут (тек)</b><br><span id="cur_az" class="value">--</span><div class="unit">°</div></div>
+        <div class="card"><b>Азимут (текущий)</b><br><span id="cur_az" class="value">--</span><div class="unit">°</div></div>
         <div class="card"><b>Азимут (цель)</b><br><span id="tar_az" class="value">--</span><div class="unit">°</div></div>
-        <div class="card"><b>Угол места (тек)</b><br><span id="cur_el" class="value">--</span><div class="unit">°</div></div>
+        <div class="card"><b>Угол места (текущий)</b><br><span id="cur_el" class="value">--</span><div class="unit">°</div></div>
         <div class="card"><b>Угол места (цель)</b><br><span id="tar_el" class="value">--</span><div class="unit">°</div></div>
-        <div class="card"><b>Поляризация (тек)</b><br><span id="cur_pol" class="value">--</span><div class="unit">°</div></div>
+        <div class="card"><b>Поляризация (тек)ущий</b><br><span id="cur_pol" class="value">--</span><div class="unit">°</div></div>
         <div class="card"><b>Поляризация (цель)</b><br><span id="tar_pol" class="value">--</span><div class="unit">°</div></div>
-        <div class="card"><b>Статус</b><br><span id="status" class="value">--</span></div>
+        <!-- <div class="card"><b>Статус</b><br><span id="status" class="value">--</span></div> -->
+        <div class="card">
+            <b>Статус</b>
+            <br>
+            <span id="status" class="value" title="Код статуса">--</span>
+        </div>
         <div class="card"><b>GPS</b><br><span id="gps" class="value">--</span></div>
         <div class="card"><b>Долгота</b><br><span id="lon" class="value">--</span><div class="unit">°</div></div>
         <div class="card"><b>Широта</b><br><span id="lat" class="value">--</span><div class="unit">°</div></div>
-        <div class="card"><b>AGC</b><br><span id="agc" class="value">--</span><div class="unit">В</div></div>
-        <div class="card"><b>Время</b><br><span id="time" class="value">--</span></div>
+        <div class="card"><b>Напряжение</b><br><span id="agc" class="value">--</span><div class="unit">В</div></div>
     </div>
 </div>
 </body>

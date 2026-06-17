@@ -10,18 +10,21 @@ async function fetchTelemetry() {
         document.getElementById('cur_pol').innerText = data.cur_pol || '--';
         document.getElementById('tar_pol').innerText = data.tar_pol || '--';
         document.getElementById('status').innerText = data.status || '--';
+        if (data.status_code) {
+            document.getElementById('status').title = `Код: ${data.status_code}`;
+        }
         document.getElementById('gps').innerText = data.gps || '--';
         document.getElementById('lon').innerText = data.lon || '--';
         document.getElementById('lat').innerText = data.lat || '--';
         document.getElementById('agc').innerText = data.agc || '--';
-        document.getElementById('time').innerText = data.time || '--';
+        // document.getElementById('time').innerText = data.time || '--';
     } catch (err) {
         console.warn("Telemetry fetch error:", err);
     }
 }
 
-// Запускаем обновление каждую секунду
-setInterval(fetchTelemetry, 1000);
+// Запуск обновления с определённой частотой
+setInterval(fetchTelemetry, 333);  // 1000 - 1 секунда
 fetchTelemetry();
 
 // Отправка команды
