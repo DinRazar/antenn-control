@@ -9,57 +9,89 @@
 </head>
 <body>
 <div class="container">
-    <h1>Antenna Control</h1>
+    <h1>Управление антенной</h1>
 
-    <div class="control-panel">
-        <h2>Управление</h2>
-        <div class="button-group">
-            <button onclick="sendCommand('cmd,stop,')">Стоп</button>
-            <button onclick="sendCommand('cmd,reset,')">Развернуть</button>
-            <button onclick="sendCommand('cmd,search,')">Поиск/наводка</button>
-            <button onclick="sendCommand('cmd,stow,')">Сложить</button>
+    <!-- Телеметрия сверху -->
+    <div class="telemetry-panel">
+        <div class="telemetry-grid">
+            <div class="telemetry-item">
+                <div class="label">Азимут</div>
+                <div class="value" id="cur_az">--°</div>
+                <div class="target">Цель: <span id="tar_az">--</span>°</div>
+            </div>
+            <div class="telemetry-item">
+                <div class="label">Угол места</div>
+                <div class="value" id="cur_el">--°</div>
+                <div class="target">Цель: <span id="tar_el">--</span>°</div>
+            </div>
+            <div class="telemetry-item">
+                <div class="label">Поляризация</div>
+                <div class="value" id="cur_pol">--°</div>
+                <div class="target">Цель: <span id="tar_pol">--</span>°</div>
+            </div>
+            <div class="telemetry-item">
+                <div class="label">Уровень сигнала</div>
+                <div class="value" id="agc">-- В</div>
+                <div class="target">Порог: 3 В</div>
+            </div>
+            <div class="telemetry-item status-item">
+                <div class="label">Статус</div>
+                <div class="value status-text" id="status">--</div>
+                <div class="target" id="status_code">Код: --</div>
+            </div>
+            <div class="telemetry-item">
+                <div class="label">GPS</div>
+                <div class="value" id="gps">--</div>
+                <div class="target"><span id="lon">--</span>° <span id="lat">--</span>°</div>
+            </div>
         </div>
-        <div class="button-group">
-            <button class="warning" onclick="manualSpeed()">Ручной ввод скорости</button>
-            <button class="manual" onclick="manualPosition()">Ручной ввод позиции</button>
-        </div>
-        <div class="input-group">
-            <label>Азимут:</label>
-            <input type="number" step="0.01" id="az" placeholder="0.00">
-            <label>Угол места:</label>
-            <input type="number" step="0.01" id="el" placeholder="0.00">
-            <label>Поляризация:</label>
-            <input type="number" step="0.01" id="pol" placeholder="0.00">
-            <button onclick="setPosition()">Установить</button>
-        </div>
-        <div class="input-group">
-            <label>Скорость (0..6):</label>
-            <input type="number" step="0.1" id="speed" value="3.0">
-            <label>Напр. (1..6):</label>
-            <input type="number" id="adj" value="1">
-            <button onclick="setSpeed()">Уст. скорость</button>
-        </div>
-        <div id="cmdStatus" class="status-msg"></div>
     </div>
 
-    <h2>Телеметрия</h2>
-    <div class="grid">
-        <div class="card"><b>Азимут (текущий)</b><br><span id="cur_az" class="value">--</span><div class="unit">°</div></div>
-        <div class="card"><b>Азимут (цель)</b><br><span id="tar_az" class="value">--</span><div class="unit">°</div></div>
-        <div class="card"><b>Угол места (текущий)</b><br><span id="cur_el" class="value">--</span><div class="unit">°</div></div>
-        <div class="card"><b>Угол места (цель)</b><br><span id="tar_el" class="value">--</span><div class="unit">°</div></div>
-        <div class="card"><b>Поляризация (тек)ущий</b><br><span id="cur_pol" class="value">--</span><div class="unit">°</div></div>
-        <div class="card"><b>Поляризация (цель)</b><br><span id="tar_pol" class="value">--</span><div class="unit">°</div></div>
-        <!-- <div class="card"><b>Статус</b><br><span id="status" class="value">--</span></div> -->
-        <div class="card">
-            <b>Статус</b>
-            <br>
-            <span id="status" class="value" title="Код статуса">--</span>
+    <!-- Визуализация антенны снизу -->
+    <div class="visualization-panel">
+        <div class="viz-container">
+            <div class="viz-box">
+                <div class="viz-label">Азимут</div>
+                <canvas id="azimuthCanvas" width="280" height="280"></canvas>
+                <div class="viz-value" id="azimuthValue">0°</div>
+            </div>
+            <div class="viz-box">
+                <div class="viz-label">Угол места</div>
+                <canvas id="elevationCanvas" width="280" height="280"></canvas>
+                <div class="viz-value" id="elevationValue">0°</div>
+            </div>
         </div>
-        <div class="card"><b>GPS</b><br><span id="gps" class="value">--</span></div>
-        <div class="card"><b>Долгота</b><br><span id="lon" class="value">--</span><div class="unit">°</div></div>
-        <div class="card"><b>Широта</b><br><span id="lat" class="value">--</span><div class="unit">°</div></div>
-        <div class="card"><b>Напряжение</b><br><span id="agc" class="value">--</span><div class="unit">В</div></div>
+    </div>
+
+    <!-- Управление -->
+    <div class="control-panel">
+        <div class="button-group">
+            <button onclick="sendCommand('cmd,stop,')" class="btn-stop">Стоп</button>
+            <button onclick="sendCommand('cmd,reset,')" class="btn-reset">Развернуть</button>
+            <button onclick="sendCommand('cmd,search,')" class="btn-search">Поиск</button>
+            <button onclick="sendCommand('cmd,stow,')" class="btn-stow">Сложить</button>
+        </div>
+        <div class="button-group">
+            <button onclick="manualSpeed()" class="btn-manual">Скорость</button>
+            <button onclick="manualPosition()" class="btn-manual">Позиция</button>
+        </div>
+        <div class="input-group">
+            <label>Аз:</label>
+            <input type="number" step="0.01" id="az" placeholder="0.00">
+            <label>Мес:</label>
+            <input type="number" step="0.01" id="el" placeholder="0.00">
+            <label>Пол:</label>
+            <input type="number" step="0.01" id="pol" placeholder="0.00">
+            <button onclick="setPosition()" class="btn-set">Уст</button>
+        </div>
+        <div class="input-group">
+            <label>Скорость:</label>
+            <input type="number" step="0.1" id="speed" value="3.0">
+            <label>Напр:</label>
+            <input type="number" id="adj" value="1">
+            <button onclick="setSpeed()" class="btn-set">Уст</button>
+        </div>
+        <div id="cmdStatus" class="status-msg"></div>
     </div>
 </div>
 </body>
