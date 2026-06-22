@@ -2,8 +2,151 @@ let azimuthCanvas, elevationCanvas;
 let azCtx, elCtx;
 let currentAz = 0, currentEl = 0;
 let prevEl = 0;
-let elDisplayMode = 'normal'; // 'normal', 'deploying', 'stowing'
+let satellites = [];
+let selectedSatellite = null;
 
+// Загрузка спутников с сервера
+async function loadSatellites() {
+    try {
+        const response = await fetch('/api/satellites');
+        satellites = await response.json();
+        updateSatelliteSelect();
+    } catch (e) {
+        console.warn('Error loading satellites:', e);
+        satellites = [];
+    }
+}
+
+// Обновление выпадающего списка
+function updateSatelliteSelect() {
+    const select = document.getElementById('satelliteSelect');
+    const currentValue = select.value;
+    select.innerHTML = '<option value="">-- Выберите --</option>';
+    satellites.forEach(sat => {
+        const option = document.createElement('option');
+        option.value = sat.id;
+        option.textContent = sat.name + ' (' + sat.position + '°' + (sat.position >= 0 ? 'E' : 'W') + ')';
+        select.appendChild(option);
+    });
+    if (currentValue) {
+        select.value = currentValue;
+    }
+}
+
+// Выбор спутника
+function selectSatellite() {
+    const select = document.getElementById('satelliteSelect');
+    const id = parseInt(select.value);
+    if (!id) {
+        document.getElementById('satPos').textContent = '--';
+        document.getElementById('satFreq').textContent = '--';
+        document.getElementById('satPol').textContent = '--';
+        selectedSatellite = null;
+        return;
+    }
+    selectedSatellite = satellites.find(s => s.id === id);
+    if (selectedSatellite) {
+        document.getElementById('satPos').textContent = selectedSatellite.position + '°' + (selectedSatellite.position >= 0 ? ' E' : ' W');
+        document.getElementById('satFreq').textContent = selectedSatellite.frequency + ' МГц';
+        document.getElementById('satPol').textContent = selectedSatellite.polarization === 0 ? 'Горизонтальная' : 'Вертикальная';
+    }
+}
+
+// Показать модальное окно
+function showAddSatellite() {
+    document.getElementById('satModal').style.display = 'block';
+    document.getElementById('satName').value = '';
+    document.getElementById('satPosition').value = '';
+    document.getElementById('satFrequency').value = '';
+    document.getElementById('satPolarization').value = '1';
+}
+
+// Закрыть модальное окно
+function closeModal() {
+    document.getElementById('satModal').style.display = 'none';
+}
+
+// Закрытие по клику вне модального окна
+window.onclick = function(event) {
+    const modal = document.getElementById('satModal');
+    if (event.target === modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Сохранение спутника на сервере
+async function saveSatellite() {
+    const name = document.getElementById('satName').value.trim();
+    const position = parseFloat(document.getElementById('satPosition').value);
+    const frequency = parseFloat(document.getElementById('satFrequency').value);
+    const polarization = parseInt(document.getElementById('satPolarization').value);
+    
+    if (!name) {
+        alert('Введите название спутника');
+        return;
+    }
+    if (isNaN(position) || position < -180 || position > 180) {
+        alert('Введите корректную позицию (-180..180)');
+        return;
+    }
+    if (isNaN(frequency)) {
+        alert('Введите корректную частоту');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/satellites', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: name,
+                position: position,
+                frequency: frequency,
+                polarization: polarization
+            })
+        });
+        
+        if (response.ok) {
+            const newSat = await response.json();
+            satellites.push(newSat);
+            updateSatelliteSelect();
+            closeModal();
+            document.getElementById('satelliteSelect').value = newSat.id;
+            selectSatellite();
+            showStatus('Спутник "' + name + '" добавлен');
+        } else {
+            const error = await response.json();
+            alert('Ошибка: ' + (error.error || 'Неизвестная ошибка'));
+        }
+    } catch (e) {
+        alert('Ошибка при сохранении: ' + e.message);
+    }
+}
+
+// Наведение на спутник
+function pointToSatellite() {
+    if (!selectedSatellite) {
+        alert('Выберите спутник');
+        return;
+    }
+    
+    const sat = selectedSatellite;
+    const cmd = 'cmd,sat,' + sat.name + ',' + sat.frequency.toFixed(2) + ',0,0,' + sat.position.toFixed(2) + ',' + sat.polarization + ',5.00,';
+    sendCommand(cmd);
+    showStatus('Наведение на спутник ' + sat.name + ' (' + sat.position + '°' + (sat.position >= 0 ? 'E' : 'W') + ')');
+}
+
+// Показать статус
+function showStatus(msg) {
+    const statusDiv = document.getElementById('cmdStatus');
+    statusDiv.innerText = '✓ ' + msg;
+    statusDiv.style.color = '#27ae60';
+    setTimeout(() => {
+        if (statusDiv.innerText.includes('✓')) statusDiv.innerText = '';
+    }, 5000);
+}
+
+// Остальные функции
 document.addEventListener('DOMContentLoaded', () => {
     azimuthCanvas = document.getElementById('azimuthCanvas');
     elevationCanvas = document.getElementById('elevationCanvas');
@@ -11,6 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
     elCtx = elevationCanvas.getContext('2d');
     drawAzimuth(0);
     drawElevation(0);
+    loadSatellites();
 });
 
 async function fetchTelemetry() {
@@ -25,62 +169,34 @@ async function fetchTelemetry() {
         const curPol = parseFloat(data.cur_pol) || 0;
         const tarPol = parseFloat(data.tar_pol) || 0;
         
-        // Определяем направление движения по углу места
         const elDiff = curEl - prevEl;
         const statusText = data.status || '';
         const statusCode = data.status_code;
         
-        // Логика отображения угла места
         let displayEl, displayElText;
-        let elDisplayValue = curEl;
-        
-        // Проверяем статус из телеметрии
         const isDeploying = statusText.includes('Развёртывание') || statusCode === 17 || statusCode === 19;
         const isStowing = statusText.includes('Складывание') || statusCode === 33 || statusCode === 35;
         
-        if (curEl < 0 && isDeploying) {
-            // Разворачивается
-            displayElText = 'Идёт развёртывание';
-            elDisplayMode = 'deploying';
+        if (curEl < 0 && (isDeploying || isStowing || elDiff !== 0)) {
+            if (isDeploying || elDiff > 0) {
+                displayElText = 'Идёт развёртывание зеркала';
+            } else if (isStowing || elDiff < 0) {
+                displayElText = 'Идёт складывание зеркала';
+            } else {
+                displayElText = 'Позиционирование';
+            }
             displayEl = '--';
-            elDisplayValue = curEl;
-        } else if (curEl < 0 && isStowing) {
-            // Складывается
-            displayElText = 'Идёт складывание';
-            elDisplayMode = 'stowing';
-            displayEl = '--';
-            elDisplayValue = curEl;
-        } else if (curEl < 0 && elDiff < 0) {
-            // Движется вниз (складывается)
-            displayElText = 'Идёт складывание';
-            elDisplayMode = 'stowing';
-            displayEl = '--';
-            elDisplayValue = curEl;
-        } else if (curEl < 0 && elDiff > 0) {
-            // Движется вверх (разворачивается)
-            displayElText = 'Идёт развёртывание';
-            elDisplayMode = 'deploying';
-            displayEl = '--';
-            elDisplayValue = curEl;
-        } else if (curEl < 0) {
-            // Если непонятно, но всё ещё отрицательное
-            displayElText = 'Позиционирование';
-            elDisplayMode = 'deploying';
-            displayEl = '--';
-            elDisplayValue = curEl;
-        } else {
-            // Нормальный режим (угол >= 0)
+        } else if (curEl >= 0) {
             displayEl = curEl.toFixed(1) + '°';
             displayElText = curEl.toFixed(1) + '°';
-            elDisplayMode = 'normal';
-            elDisplayValue = curEl;
+        } else {
+            displayEl = '--°';
+            displayElText = '--°';
         }
         
-        // Обновляем DOM с учётом логики
         document.getElementById('cur_az').innerHTML = curAz.toFixed(1) + '°';
         document.getElementById('tar_az').innerText = tarAz.toFixed(1);
         
-        // Угол места - специальная обработка
         const elElement = document.getElementById('cur_el');
         if (curEl < 0 && (isDeploying || isStowing || elDiff !== 0)) {
             elElement.innerHTML = displayElText;
@@ -111,14 +227,12 @@ async function fetchTelemetry() {
         document.getElementById('lon').innerText = data.lon || '--';
         document.getElementById('lat').innerText = data.lat || '--';
         
-        // Для визуализации используем реальное значение (может быть отрицательным)
         currentAz = curAz;
-        currentEl = Math.max(0, curEl); // Но рисуем только от 0 и выше
+        currentEl = Math.max(0, curEl);
         drawAzimuth(curAz);
         drawElevation(Math.max(0, curEl));
         document.getElementById('azimuthValue').innerText = curAz.toFixed(1) + '°';
         
-        // Для elevation value показываем текст статуса если отрицательное
         const elVizValue = document.getElementById('elevationValue');
         if (curEl < 0 && (isDeploying || isStowing || elDiff !== 0)) {
             elVizValue.innerText = displayElText;
@@ -130,7 +244,6 @@ async function fetchTelemetry() {
             elVizValue.style.color = '#2c3e50';
         }
         
-        // Сохраняем предыдущее значение для определения направления
         prevEl = curEl;
         
     } catch (err) {
@@ -138,7 +251,7 @@ async function fetchTelemetry() {
     }
 }
 
-// Простой рисунок азимута (вид сверху)
+// Функции рисования (без изменений)
 function drawAzimuth(angle) {
     const ctx = azCtx;
     const w = azimuthCanvas.width;
@@ -149,14 +262,12 @@ function drawAzimuth(angle) {
     
     ctx.clearRect(0, 0, w, h);
     
-    // Круг
     ctx.strokeStyle = '#bdc3c7';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
     ctx.stroke();
     
-    // Метки через 30 градусов
     for (let i = 0; i < 12; i++) {
         const deg = i * 30;
         const rad = (deg - 90) * Math.PI / 180;
@@ -169,7 +280,6 @@ function drawAzimuth(angle) {
         ctx.stroke();
     }
     
-    // Подписи N, E, S, W
     const dirs = ['N', 'E', 'S', 'W'];
     for (let i = 0; i < 4; i++) {
         const rad = (i * 90 - 90) * Math.PI / 180;
@@ -180,7 +290,6 @@ function drawAzimuth(angle) {
         ctx.fillText(dirs[i], cx + Math.cos(rad) * (radius - 25), cy + Math.sin(rad) * (radius - 25));
     }
     
-    // Стрелка
     const rad = (angle - 90) * Math.PI / 180;
     const len = radius - 12;
     const head = 10;
@@ -192,7 +301,6 @@ function drawAzimuth(angle) {
     ctx.lineTo(cx + Math.cos(rad) * len, cy + Math.sin(rad) * len);
     ctx.stroke();
     
-    // Наконечник
     const tipX = cx + Math.cos(rad) * len;
     const tipY = cy + Math.sin(rad) * len;
     ctx.fillStyle = '#2980b9';
@@ -203,14 +311,12 @@ function drawAzimuth(angle) {
     ctx.closePath();
     ctx.fill();
     
-    // Центр
     ctx.fillStyle = '#2980b9';
     ctx.beginPath();
     ctx.arc(cx, cy, 4, 0, Math.PI * 2);
     ctx.fill();
 }
 
-// Простой рисунок угла места (вид сбоку) - всегда рисует от 0 до 90
 function drawElevation(angle) {
     const ctx = elCtx;
     const w = elevationCanvas.width;
@@ -221,17 +327,14 @@ function drawElevation(angle) {
     
     ctx.clearRect(0, 0, w, h);
     
-    // Ограничиваем угол для отображения (0-90)
     const displayAngle = Math.max(0, Math.min(90, angle));
     
-    // Полукруг
     ctx.strokeStyle = '#bdc3c7';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(cx, cy, radius, -Math.PI, 0);
     ctx.stroke();
     
-    // Горизонталь
     ctx.strokeStyle = '#ecf0f1';
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
@@ -241,7 +344,6 @@ function drawElevation(angle) {
     ctx.stroke();
     ctx.setLineDash([]);
     
-    // Метки через 15 градусов
     for (let i = 0; i <= 6; i++) {
         const deg = i * 15;
         const rad = (180 - deg) * Math.PI / 180;
@@ -253,7 +355,6 @@ function drawElevation(angle) {
         ctx.stroke();
     }
     
-    // Подписи 0, 45, 90
     const labels = [[0, 0], [45, 45], [90, 90]];
     for (let i = 0; i < labels.length; i++) {
         const deg = labels[i][1];
@@ -266,7 +367,6 @@ function drawElevation(angle) {
         ctx.fillText(labels[i][0] + '°', cx + Math.cos(rad) * (radius - 25), cy - Math.sin(rad) * (radius - 25) + off);
     }
     
-    // Антенна (используем displayAngle)
     const rad = (180 - displayAngle) * Math.PI / 180;
     const len = radius - 5;
     
@@ -277,20 +377,17 @@ function drawElevation(angle) {
     ctx.lineTo(cx + Math.cos(rad) * len, cy - Math.sin(rad) * len);
     ctx.stroke();
     
-    // Основание
     ctx.fillStyle = '#2980b9';
     ctx.fillRect(cx - 12, cy + 2, 24, 12);
     ctx.strokeStyle = '#2980b9';
     ctx.lineWidth = 1;
     ctx.strokeRect(cx - 12, cy + 2, 24, 12);
     
-    // Точка на конце
     ctx.fillStyle = '#2980b9';
     ctx.beginPath();
     ctx.arc(cx + Math.cos(rad) * len, cy - Math.sin(rad) * len, 3, 0, Math.PI * 2);
     ctx.fill();
     
-    // Центр
     ctx.fillStyle = '#2980b9';
     ctx.beginPath();
     ctx.arc(cx, cy, 4, 0, Math.PI * 2);
@@ -300,6 +397,7 @@ function drawElevation(angle) {
 setInterval(fetchTelemetry, 333);
 fetchTelemetry();
 
+// Отправка команды
 async function sendCommand(payload) {
     const statusDiv = document.getElementById('cmdStatus');
     try {

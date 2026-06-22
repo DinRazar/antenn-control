@@ -47,6 +47,70 @@
         </div>
     </div>
 
+    <!-- Управление спутниками -->
+    <div class="satellite-panel">
+        <div class="satellite-header">
+            <h2>Спутники</h2>
+            <button onclick="showAddSatellite()" class="btn-add">+ Добавить</button>
+        </div>
+        
+        <div class="satellite-controls">
+            <div class="satellite-select">
+                <label>Выберите спутник</label>
+                <select id="satelliteSelect" onchange="selectSatellite()">
+                    <option value="">-- Выберите --</option>
+                </select>
+            </div>
+            <div class="satellite-info" id="satelliteInfo">
+                <div class="info-item">
+                    <span class="info-label">Позиция</span>
+                    <span class="info-value" id="satPos">--</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Частота</span>
+                    <span class="info-value" id="satFreq">--</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Поляризация</span>
+                    <span class="info-value" id="satPol">--</span>
+                </div>
+            </div>
+            <button onclick="pointToSatellite()" class="btn-point">Применить</button>
+        </div>
+        
+        <!-- Модальное окно добавления спутника -->
+        <div id="satModal" class="modal">
+            <div class="modal-content">
+                <span class="modal-close" onclick="closeModal()">&times;</span>
+                <h3>Добавить спутник</h3>
+                <div class="modal-fields">
+                    <div class="field-group">
+                        <label>Название</label>
+                        <input type="text" id="satName" placeholder="Напр. AsiaSat 7">
+                    </div>
+                    <div class="field-group">
+                        <label>Позиция (градусы)</label>
+                        <input type="number" step="0.1" id="satPosition" placeholder="110.5">
+                        <span class="hint">Восток +, Запад -</span>
+                    </div>
+                    <div class="field-group">
+                        <label>Частота (МГц)</label>
+                        <input type="number" step="0.01" id="satFrequency" placeholder="12260.00">
+                        <!-- <span class="hint">12200-12900 МГц</span> -->
+                    </div>
+                    <div class="field-group">
+                        <label>Поляризация</label>
+                        <select id="satPolarization">
+                            <option value="0">Горизонтальная</option>
+                            <option value="1" selected>Вертикальная</option>
+                        </select>
+                    </div>
+                </div>
+                <button onclick="saveSatellite()" class="btn-save">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Визуализация антенны снизу -->
     <div class="visualization-panel">
         <div class="viz-container">
@@ -82,15 +146,15 @@
             <input type="number" step="0.01" id="el" placeholder="0.00">
             <label>Пол:</label>
             <input type="number" step="0.01" id="pol" placeholder="0.00">
-            <button onclick="setPosition()" class="btn-set">Уст</button>
+            <button onclick="setPosition()" class="btn-set">Установить</button>
         </div>
-        <div class="input-group">
+        <!-- <div class="input-group">
             <label>Скорость:</label>
             <input type="number" step="0.1" id="speed" value="3.0">
             <label>Напр:</label>
             <input type="number" id="adj" value="1">
             <button onclick="setSpeed()" class="btn-set">Уст</button>
-        </div>
+        </div> -->
         <div id="cmdStatus" class="status-msg"></div>
     </div>
 </div>

@@ -1,0 +1,16 @@
+[
+  {
+    "id": 1,
+    "name": "Turk",
+    "position": 42.0,
+    "frequency": 12685.0,
+    "polarization": 1
+  },
+  {
+    "id": 2,
+    "name": "Express",
+    "position": 36.0,
+    "frequency": 12322.0,
+    "polarization": 0
+  }
+]
