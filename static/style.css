@@ -87,6 +87,64 @@ h2 {
     font-size: 22px;
 }
 
+/* Параметры антенны */
+.params-panel {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.params-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin: 15px 0;
+}
+
+.param-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.param-item label {
+    font-size: 12px;
+    color: #7f8c8d;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.param-item input {
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    background: #fafafa;
+}
+
+.param-item input:focus {
+    outline: none;
+    border-color: #3498db;
+}
+
+.btn-save-params {
+    background: #3498db;
+    color: white;
+    border: none;
+    padding: 8px 24px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    margin-top: 5px;
+}
+
+.btn-save-params:hover {
+    opacity: 0.85;
+}
+
 /* Спутники */
 .satellite-panel {
     background: white;
@@ -440,6 +498,9 @@ button:hover {
     .telemetry-grid {
         grid-template-columns: repeat(3, 1fr);
     }
+    .params-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
     .satellite-info {
         flex-wrap: wrap;
         gap: 10px;
@@ -449,6 +510,9 @@ button:hover {
 @media (max-width: 500px) {
     .telemetry-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+    .params-grid {
+        grid-template-columns: 1fr;
     }
     .viz-container {
         gap: 20px;

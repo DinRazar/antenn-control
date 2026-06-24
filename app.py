@@ -10,7 +10,7 @@ from flask import Flask, render_template, request, jsonify
 
 # Словарь статусов антенны (русский язык)
 STATUS_MAP = {
-    0: 'Бездействие',
+    0: 'Ожидание',
     17: 'Развёртывание',
     18: 'Ошибка при развёртывании',
     19: 'Развёртывание завершено',
@@ -33,7 +33,7 @@ STATUS_MAP = {
     84: 'Сопровождение приостановлено',
     97: 'Ручное управление (скорость)',
     98: 'Ручное управление (позиция)',
-    144: 'Бездействие',
+    144: 'Ожидание',
     238: 'Перезагрузка хоста'
 }
 
@@ -70,12 +70,21 @@ class AntennaSession:
         self.on_show = on_show
         self.running = True
         self.buffer = ''
+        self.antenna_params = None  # храним последние параметры [search_az, cal_el, cal_pol, cal_az, search_el, search_step]
         self.read_thread = threading.Thread(target=self._read_loop, daemon=True)
         self.read_thread.start()
         self.poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
         self.poll_thread.start()
+        # Запросим параметры антенны при старте
+        self.request_antenna_params()
+
     def send_payload(self, payload):
         self.transport.write_frame(build_frame(payload))
+
+    def request_antenna_params(self):
+        """Отправить запрос на получение параметров антенны"""
+        self.send_payload('cmd,get ant,')
+
     def _read_loop(self):
         while self.running:
             chunk = self.transport.read_chunk()
@@ -83,6 +92,7 @@ class AntennaSession:
                 self.buffer += chunk
                 self._process_buffer()
             time.sleep(0.05)
+
     def _process_buffer(self):
         data = self.buffer.replace('\r\n', '\n').replace('\r', '\n')
         if '\n' not in data:
@@ -94,10 +104,28 @@ class AntennaSession:
             line = line.strip()
             if line.startswith('$show'):
                 self.on_show(line)
+            elif line.startswith('$cmd,ant,'):
+                # Парсим параметры антенны
+                # Формат: $cmd,ant,val1,val2,val3,val4,val5,val6,*xx
+                try:
+                    # Разбиваем по запятой
+                    items = line.split(',')
+                    if len(items) >= 8:
+                        # items[0] = '$cmd', items[1] = 'ant', items[2..7] = значения, items[8] = '*xx'
+                        vals = [float(items[i]) for i in range(2, 8)]
+                        self.antenna_params = vals
+                        print(f"Antenna params updated: {vals}")
+                except Exception as e:
+                    print(f"Error parsing antenna params: {e}")
+            elif line.startswith('$cmd,ant ack') or line.startswith('$cmd,ant ok'):
+                # Подтверждение установки параметров
+                print(f"Antenna params ack: {line}")
+
     def _poll_loop(self):
         while self.running:
             self.send_payload('cmd,get show,')
             time.sleep(1.0)
+
     def close(self):
         self.running = False
         self.transport.close()
@@ -114,17 +142,15 @@ latest_telemetry = {
 
 # Функции для работы со спутниками
 def load_satellites():
-    """Загружает спутники из JSON файла"""
     try:
         if os.path.exists(SATELLITES_FILE):
             with open(SATELLITES_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
         else:
-            # Создаем файл с тестовыми спутниками
             default_satellites = [
-                {"id": 1, "name": "Turk", "position": 42.0, "frequency": 12685.00, "polarization": 1},
-                {"id": 2, "name": "Express", "position": 36.0, "frequency": 12322.00, "polarization": 0},
-
+                {"id": 1, "name": "Sino5", "position": 110.5, "frequency": 12260.00, "polarization": 1},
+                {"id": 2, "name": "AsiaSat 7", "position": 105.5, "frequency": 12400.00, "polarization": 0},
+                {"id": 3, "name": "Satellite X", "position": -45.0, "frequency": 12600.00, "polarization": 1}
             ]
             save_satellites(default_satellites)
             return default_satellites
@@ -133,7 +159,6 @@ def load_satellites():
         return []
 
 def save_satellites(satellites):
-    """Сохраняет спутники в JSON файл"""
     try:
         with open(SATELLITES_FILE, 'w', encoding='utf-8') as f:
             json.dump(satellites, f, ensure_ascii=False, indent=2)
@@ -215,13 +240,11 @@ def send_command():
 # API для работы со спутниками
 @app.route('/api/satellites', methods=['GET'])
 def get_satellites():
-    """Получить список всех спутников"""
     satellites = load_satellites()
     return jsonify(satellites)
 
 @app.route('/api/satellites', methods=['POST'])
 def add_satellite():
-    """Добавить новый спутник"""
     data = request.get_json()
     if not data:
         return jsonify({'error': 'No data provided'}), 400
@@ -257,13 +280,45 @@ def add_satellite():
 
 @app.route('/api/satellites/<int:sat_id>', methods=['DELETE'])
 def delete_satellite(sat_id):
-    """Удалить спутник по ID"""
     satellites = load_satellites()
     satellites = [s for s in satellites if s.get('id') != sat_id]
     if save_satellites(satellites):
         return jsonify({'status': 'deleted'})
     else:
         return jsonify({'error': 'Failed to delete satellite'}), 500
+
+# API для работы с параметрами антенны
+@app.route('/api/antenna_params', methods=['GET'])
+def get_antenna_params():
+    if session.antenna_params is not None:
+        params = session.antenna_params
+        return jsonify({
+            'search_az': params[0],
+            'cal_el': params[1],
+            'cal_pol': params[2],
+            'cal_az': params[3],
+            'search_el': params[4],
+            'search_step': params[5]
+        })
+    else:
+        return jsonify({'error': 'No data'}), 404
+
+@app.route('/api/antenna_params', methods=['POST'])
+def set_antenna_params():
+    data = request.get_json()
+    try:
+        search_az = float(data['search_az'])
+        cal_el = float(data['cal_el'])
+        cal_pol = float(data['cal_pol'])
+        cal_az = float(data['cal_az'])
+        search_el = float(data['search_el'])
+        search_step = float(data['search_step'])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({'error': 'Invalid data'}), 400
+    
+    payload = f'cmd,ant,{search_az:.2f},{cal_el:.2f},{cal_pol:.2f},{cal_az:.2f},{search_el:.2f},{search_step:.2f},'
+    session.send_payload(payload)
+    return jsonify({'status': 'sent'})
 
 # Запуск
 def main():

@@ -86,17 +86,16 @@
                 <div class="modal-fields">
                     <div class="field-group">
                         <label>Название</label>
-                        <input type="text" id="satName" placeholder="Напр. AsiaSat 7">
+                        <input type="text" id="satName" placeholder="Напр. 42">
                     </div>
                     <div class="field-group">
                         <label>Позиция (градусы)</label>
-                        <input type="number" step="0.1" id="satPosition" placeholder="110.5">
+                        <input type="number" step="0.1" id="satPosition" placeholder="42.00">
                         <span class="hint">Восток +, Запад -</span>
                     </div>
                     <div class="field-group">
                         <label>Частота (МГц)</label>
-                        <input type="number" step="0.01" id="satFrequency" placeholder="12260.00">
-                        <!-- <span class="hint">12200-12900 МГц</span> -->
+                        <input type="number" step="0.01" id="satFrequency" placeholder="11701.50">
                     </div>
                     <div class="field-group">
                         <label>Поляризация</label>
@@ -146,7 +145,7 @@
             <input type="number" step="0.01" id="el" placeholder="0.00">
             <label>Пол:</label>
             <input type="number" step="0.01" id="pol" placeholder="0.00">
-            <button onclick="setPosition()" class="btn-set">Установить</button>
+            <button onclick="setPosition()" class="btn-set">Уст</button>
         </div>
         <!-- <div class="input-group">
             <label>Скорость:</label>
@@ -155,6 +154,39 @@
             <input type="number" id="adj" value="1">
             <button onclick="setSpeed()" class="btn-set">Уст</button>
         </div> -->
+           <!-- Параметры антенны -->
+        <div class="params-panel">
+            <h2>Параметры антенны</h2>
+            <div class="params-grid">
+                <div class="param-item">
+                    <label>Азимут поиска</label>
+                    <input type="number" step="0.01" id="search_az" placeholder="0.00">
+                </div>
+                <div class="param-item">
+                    <label>Угол места поиска</label>
+                    <input type="number" step="0.01" id="search_el" placeholder="0.00">
+                </div>
+                <div class="param-item">
+                    <label>Шаг поиска</label>
+                    <input type="number" step="0.01" id="search_step" placeholder="0.00">
+                </div>
+                <div class="param-item">
+                    <label>Азимут калибровки</label>
+                    <input type="number" step="0.01" id="cal_az" placeholder="0.00">
+                </div>
+                <div class="param-item">
+                    <label>Угол места калибровки</label>
+                    <input type="number" step="0.01" id="cal_el" placeholder="0.00">
+                </div>
+                <div class="param-item">
+                    <label>Поляризация калибровки</label>
+                    <input type="number" step="0.01" id="cal_pol" placeholder="0.00">
+                </div>
+            </div>
+            <button onclick="saveAntennaParams()" class="btn-save-params">Сохранить параметры</button>
+            <div id="paramsStatus" class="status-msg"></div>
+        </div>
+
         <div id="cmdStatus" class="status-msg"></div>
     </div>
 </div>

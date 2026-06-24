@@ -93,6 +93,10 @@ async function saveSatellite() {
         alert('Введите корректную частоту');
         return;
     }
+    if (polarization !== 0 && polarization !== 1) {
+        alert('Выберите поляризацию');
+        return;
+    }
     
     try {
         const response = await fetch('/api/satellites', {
@@ -146,7 +150,61 @@ function showStatus(msg) {
     }, 5000);
 }
 
-// Остальные функции
+// --- Параметры антенны ---
+async function loadAntennaParams() {
+    try {
+        const resp = await fetch('/api/antenna_params');
+        if (resp.ok) {
+            const data = await resp.json();
+            document.getElementById('search_az').value = data.search_az;
+            document.getElementById('cal_el').value = data.cal_el;
+            document.getElementById('cal_pol').value = data.cal_pol;
+            document.getElementById('cal_az').value = data.cal_az;
+            document.getElementById('search_el').value = data.search_el;
+            document.getElementById('search_step').value = data.search_step;
+        }
+    } catch (e) {
+        console.warn('Error loading antenna params:', e);
+    }
+}
+
+async function saveAntennaParams() {
+    const params = {
+        search_az: parseFloat(document.getElementById('search_az').value),
+        cal_el: parseFloat(document.getElementById('cal_el').value),
+        cal_pol: parseFloat(document.getElementById('cal_pol').value),
+        cal_az: parseFloat(document.getElementById('cal_az').value),
+        search_el: parseFloat(document.getElementById('search_el').value),
+        search_step: parseFloat(document.getElementById('search_step').value)
+    };
+    for (let key in params) {
+        if (isNaN(params[key])) {
+            alert('Все поля должны быть числами');
+            return;
+        }
+    }
+    try {
+        const resp = await fetch('/api/antenna_params', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params)
+        });
+        if (resp.ok) {
+            const statusDiv = document.getElementById('paramsStatus');
+            statusDiv.innerText = '✓ Параметры сохранены';
+            statusDiv.style.color = '#27ae60';
+            setTimeout(() => {
+                if (statusDiv.innerText.includes('✓')) statusDiv.innerText = '';
+            }, 5000);
+        } else {
+            alert('Ошибка сохранения');
+        }
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+// --- Остальные функции ---
 document.addEventListener('DOMContentLoaded', () => {
     azimuthCanvas = document.getElementById('azimuthCanvas');
     elevationCanvas = document.getElementById('elevationCanvas');
@@ -155,6 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
     drawAzimuth(0);
     drawElevation(0);
     loadSatellites();
+    loadAntennaParams();
 });
 
 async function fetchTelemetry() {
@@ -179,9 +238,9 @@ async function fetchTelemetry() {
         
         if (curEl < 0 && (isDeploying || isStowing || elDiff !== 0)) {
             if (isDeploying || elDiff > 0) {
-                displayElText = 'Идёт развёртывание зеркала';
+                displayElText = 'Идёт развёртывание';
             } else if (isStowing || elDiff < 0) {
-                displayElText = 'Идёт складывание зеркала';
+                displayElText = 'Идёт складывание';
             } else {
                 displayElText = 'Позиционирование';
             }
@@ -251,7 +310,7 @@ async function fetchTelemetry() {
     }
 }
 
-// Функции рисования (без изменений)
+// Функции рисования
 function drawAzimuth(angle) {
     const ctx = azCtx;
     const w = azimuthCanvas.width;

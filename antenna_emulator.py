@@ -35,7 +35,7 @@ def verify_frame(frame):
     return True, payload
 
 # ------------------------------------------------------------
-# Класс состояния антенны (без изменений)
+# Класс состояния антенны (добавлены параметры антенны)
 # ------------------------------------------------------------
 class AntennaState(object):
     def __init__(self):
@@ -64,6 +64,14 @@ class AntennaState(object):
         self.current_az = '180.00'
         self.current_el = '29.50'
         self.current_pol = '0.00'
+
+        # --- Параметры антенны (окно поиска и калибровка) ---
+        self.search_az = '40.00'      # азимут поиска
+        self.cal_el = '25.32'         # угол места калибровки
+        self.cal_pol = '-2.35'        # поляризация калибровки
+        self.cal_az = '3.50'          # азимут калибровки
+        self.search_el = '10.00'      # угол места поиска
+        self.search_step = '0.50'     # шаг поиска
 
         self.status = '144'
         self.carrier_heading = '90.35'
@@ -126,6 +134,17 @@ class AntennaState(object):
     def dvb_payload(self):
         return 'cmd,dvb,%s,%s,' % (self.dvb_lo, self.dvb_mag)
 
+    def ant_payload(self):
+        # Формат: cmd,ant,search_az,cal_el,cal_pol,cal_az,search_el,search_step,
+        return 'cmd,ant,%s,%s,%s,%s,%s,%s,' % (
+            self.search_az,
+            self.cal_el,
+            self.cal_pol,
+            self.cal_az,
+            self.search_el,
+            self.search_step
+        )
+
 def ack_payload(command_name):
     return 'cmd,%s ack,' % command_name
 
@@ -160,6 +179,8 @@ def handle_payload(state, payload):
         return build_frame(state.beacon_payload())
     if payload == 'cmd,get dvb,':
         return build_frame(state.dvb_payload())
+    if payload == 'cmd,get ant,':
+        return build_frame(state.ant_payload())
 
     if payload == 'cmd,reset,':
         state.status = '19'
@@ -229,6 +250,20 @@ def handle_payload(state, payload):
         state.dvb_mag = parts[3]
         return build_frame(ok_payload('set dvb'))
 
+    # Обработка установки параметров антенны
+    if len(parts) >= 8 and parts[1] == 'ant':
+        # Формат: cmd,ant,search_az,cal_el,cal_pol,cal_az,search_el,search_step,
+        try:
+            state.search_az = parts[2]
+            state.cal_el = parts[3]
+            state.cal_pol = parts[4]
+            state.cal_az = parts[5]
+            state.search_el = parts[6]
+            state.search_step = parts[7]
+            return build_frame(ok_payload('ant'))
+        except IndexError:
+            return build_frame(para_error_payload())
+
     return build_frame(para_error_payload())
 
 # ------------------------------------------------------------
@@ -287,12 +322,11 @@ def run_demo():
         'cmd,get show,',
         'cmd,get sat,',
         'cmd,get place,',
+        'cmd,get ant,',
         'cmd,search,',
         'cmd,manual,1,3.00',
         'cmd,dir,180.00,21.50,-90.00,',
-        'cmd,set rec,beacon,',
-        'cmd,set beacon,11300,1.0,',
-        'cmd,set dvb,11300,1.0,',
+        'cmd,ant,40.00,25.32,-2.35,3.50,10.00,0.50,',
         'cmd,stop,'
     ]
     print('Offline demo mode')
