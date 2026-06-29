@@ -5,6 +5,17 @@ let prevEl = 0;
 let satellites = [];
 let selectedSatellite = null;
 
+// Параметры антенны (окно поиска)
+let searchAz = 0;    // полный азимут поиска (делится на 2)
+let searchEl = 0;    // полный угол места поиска (без деления)
+
+// Целевые значения
+let targetAz = 0;
+let targetEl = 0;
+
+// Флаг, показывать ли диапазоны поиска (только при автоматическом наведении)
+let showSearchRange = false;
+
 // Загрузка спутников с сервера
 async function loadSatellites() {
     try {
@@ -162,6 +173,12 @@ async function loadAntennaParams() {
             document.getElementById('cal_az').value = data.cal_az;
             document.getElementById('search_el').value = data.search_el;
             document.getElementById('search_step').value = data.search_step;
+            // Сохраняем для визуализации
+            searchAz = parseFloat(data.search_az) || 0;
+            searchEl = parseFloat(data.search_el) || 0;
+            // Перерисовываем
+            drawAzimuth(currentAz);
+            drawElevation(Math.max(0, currentEl));
         }
     } catch (e) {
         console.warn('Error loading antenna params:', e);
@@ -190,6 +207,12 @@ async function saveAntennaParams() {
             body: JSON.stringify(params)
         });
         if (resp.ok) {
+            // Обновляем локальные переменные
+            searchAz = params.search_az;
+            searchEl = params.search_el;
+            // Перерисовываем
+            drawAzimuth(currentAz);
+            drawElevation(Math.max(0, currentEl));
             const statusDiv = document.getElementById('paramsStatus');
             statusDiv.innerText = '✓ Параметры сохранены';
             statusDiv.style.color = '#27ae60';
@@ -228,14 +251,26 @@ async function fetchTelemetry() {
         const curPol = parseFloat(data.cur_pol) || 0;
         const tarPol = parseFloat(data.tar_pol) || 0;
         
-        const elDiff = curEl - prevEl;
-        const statusText = data.status || '';
-        const statusCode = data.status_code;
+        // Сохраняем целевые значения для визуализации
+        targetAz = tarAz;
+        targetEl = tarEl;
         
-        let displayEl, displayElText;
+        // Определяем, нужно ли показывать диапазоны поиска (автоматическое наведение)
+        const statusCode = data.status_code;
+        const statusText = data.status || '';
+        // Коды автоматического наведения: 49-52 (наведение), 81-84 (сопровождение)
+        // Также если статус содержит "Наведение" или "Сопровождение"
+        const autoCodes = [49, 50, 51, 52, 81, 82, 83, 84];
+        const isAuto = autoCodes.includes(statusCode) || 
+                       statusText.includes('Наведение') || 
+                       statusText.includes('Сопровождение');
+        showSearchRange = isAuto;
+        
+        const elDiff = curEl - prevEl;
         const isDeploying = statusText.includes('Развёртывание') || statusCode === 17 || statusCode === 19;
         const isStowing = statusText.includes('Складывание') || statusCode === 33 || statusCode === 35;
         
+        let displayEl, displayElText;
         if (curEl < 0 && (isDeploying || isStowing || elDiff !== 0)) {
             if (isDeploying || elDiff > 0) {
                 displayElText = 'Идёт развёртывание';
@@ -288,6 +323,7 @@ async function fetchTelemetry() {
         
         currentAz = curAz;
         currentEl = Math.max(0, curEl);
+        // Перерисовываем с учетом флага showSearchRange
         drawAzimuth(curAz);
         drawElevation(Math.max(0, curEl));
         document.getElementById('azimuthValue').innerText = curAz.toFixed(1) + '°';
@@ -310,7 +346,7 @@ async function fetchTelemetry() {
     }
 }
 
-// Функции рисования
+// Функции рисования с добавлением диапазона поиска и цели
 function drawAzimuth(angle) {
     const ctx = azCtx;
     const w = azimuthCanvas.width;
@@ -321,6 +357,28 @@ function drawAzimuth(angle) {
     
     ctx.clearRect(0, 0, w, h);
     
+    // ---- Рисуем диапазон поиска (сектор) только если нужно ----
+    if (showSearchRange && searchAz > 0 && targetAz >= 0) {
+        const half = searchAz / 2;
+        let startAngle = targetAz - half;
+        let endAngle = targetAz + half;
+        // Нормализуем углы в радианы (от -90° для начала отсчета на компасе)
+        let startRad = (startAngle - 90) * Math.PI / 180;
+        let endRad = (endAngle - 90) * Math.PI / 180;
+        // Чтобы дуга была от меньшего к большему по часовой стрелке
+        if (endRad < startRad) endRad += 2 * Math.PI;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, radius, startRad, endRad);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(255, 165, 0, 0.2)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 165, 0, 0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+    }
+    
+    // ---- Рисуем базовый круг и метки ----
     ctx.strokeStyle = '#bdc3c7';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -349,6 +407,32 @@ function drawAzimuth(angle) {
         ctx.fillText(dirs[i], cx + Math.cos(rad) * (radius - 25), cy + Math.sin(rad) * (radius - 25));
     }
     
+    // ---- Рисуем целевую стрелку (пунктир) ----
+    if (targetAz >= 0) {
+        const rad = (targetAz - 90) * Math.PI / 180;
+        const len = radius - 12;
+        const head = 8;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + Math.cos(rad) * len, cy + Math.sin(rad) * len);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Наконечник
+        const tipX = cx + Math.cos(rad) * len;
+        const tipY = cy + Math.sin(rad) * len;
+        ctx.fillStyle = '#e67e22';
+        ctx.beginPath();
+        ctx.moveTo(tipX, tipY);
+        ctx.lineTo(tipX - Math.cos(rad - 0.5) * head, tipY - Math.sin(rad - 0.5) * head);
+        ctx.lineTo(tipX - Math.cos(rad + 0.5) * head, tipY - Math.sin(rad + 0.5) * head);
+        ctx.closePath();
+        ctx.fill();
+    }
+    
+    // ---- Рисуем текущую стрелку (синяя) ----
     const rad = (angle - 90) * Math.PI / 180;
     const len = radius - 12;
     const head = 10;
@@ -386,8 +470,34 @@ function drawElevation(angle) {
     
     ctx.clearRect(0, 0, w, h);
     
-    const displayAngle = Math.max(0, Math.min(90, angle));
+    // ---- Рисуем диапазон поиска по углу места (сектор) только если нужно ----
+    if (showSearchRange && searchEl > 0 && targetEl >= 0) {
+        // Диапазон от targetEl - searchEl до targetEl + searchEl
+        let low = targetEl - searchEl;
+        let high = targetEl + searchEl;
+        // Ограничим 0-90
+        low = Math.max(0, low);
+        high = Math.min(90, high);
+        if (low < high) {
+            // Преобразуем углы в радианы для дуги
+            // В нашей системе 0° — слева, 90° — сверху, угол растёт против часовой
+            // Для рисования сектора от low до high используем дугу против часовой стрелки (counterclockwise = false)
+            // от угла (180 - low) до (180 - high)
+            const startRad = Math.PI + (low * Math.PI / 180);
+            const endRad = Math.PI + (high * Math.PI / 180);
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, radius, startRad, endRad, false); // против часовой
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(255, 165, 0, 0.2)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255, 165, 0, 0.5)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+        }
+    }
     
+    // ---- Рисуем полукруг и метки ----
     ctx.strokeStyle = '#bdc3c7';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -426,6 +536,30 @@ function drawElevation(angle) {
         ctx.fillText(labels[i][0] + '°', cx + Math.cos(rad) * (radius - 25), cy - Math.sin(rad) * (radius - 25) + off);
     }
     
+    // ---- Рисуем целевую стрелку (пунктир) ----
+    if (targetEl >= 0) {
+        const displayAngle = Math.max(0, Math.min(90, targetEl));
+        const rad = (180 - displayAngle) * Math.PI / 180;
+        const len = radius - 8;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + Math.cos(rad) * len, cy - Math.sin(rad) * len);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Наконечник - кружок
+        const tipX = cx + Math.cos(rad) * len;
+        const tipY = cy - Math.sin(rad) * len;
+        ctx.fillStyle = '#e67e22';
+        ctx.beginPath();
+        ctx.arc(tipX, tipY, 4, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+    
+    // ---- Рисуем текущую антенну (синяя) ----
+    const displayAngle = Math.max(0, Math.min(90, angle));
     const rad = (180 - displayAngle) * Math.PI / 180;
     const len = radius - 5;
     
