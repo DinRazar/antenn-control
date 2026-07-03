@@ -35,7 +35,7 @@ def verify_frame(frame):
     return True, payload
 
 # ------------------------------------------------------------
-# Класс состояния антенны (добавлены параметры антенны)
+# Класс состояния антенны (добавлены параметры антенны и порог)
 # ------------------------------------------------------------
 class AntennaState(object):
     def __init__(self):
@@ -72,6 +72,9 @@ class AntennaState(object):
         self.cal_az = '3.50'          # азимут калибровки
         self.search_el = '10.00'      # угол места поиска
         self.search_step = '0.50'     # шаг поиска
+
+        # --- Порог захвата (новое поле) ---
+        self.lock_threshold = '3.00'
 
         self.status = '144'
         self.carrier_heading = '90.35'
@@ -145,6 +148,10 @@ class AntennaState(object):
             self.search_step
         )
 
+    def lock_payload(self):
+        # Формат: cmd,lock,value,
+        return 'cmd,lock,%s,' % self.lock_threshold
+
 def ack_payload(command_name):
     return 'cmd,%s ack,' % command_name
 
@@ -181,6 +188,8 @@ def handle_payload(state, payload):
         return build_frame(state.dvb_payload())
     if payload == 'cmd,get ant,':
         return build_frame(state.ant_payload())
+    if payload == 'cmd,get lock,':
+        return build_frame(state.lock_payload())
 
     if payload == 'cmd,reset,':
         state.status = '19'
@@ -252,7 +261,6 @@ def handle_payload(state, payload):
 
     # Обработка установки параметров антенны
     if len(parts) >= 8 and parts[1] == 'ant':
-        # Формат: cmd,ant,search_az,cal_el,cal_pol,cal_az,search_el,search_step,
         try:
             state.search_az = parts[2]
             state.cal_el = parts[3]
@@ -263,6 +271,11 @@ def handle_payload(state, payload):
             return build_frame(ok_payload('ant'))
         except IndexError:
             return build_frame(para_error_payload())
+
+    # --- Обработка установки порога захвата (новое) ---
+    if len(parts) >= 4 and parts[1] == 'set lock':
+        state.lock_threshold = parts[2]
+        return build_frame(ok_payload('set lock'))
 
     return build_frame(para_error_payload())
 
@@ -323,10 +336,13 @@ def run_demo():
         'cmd,get sat,',
         'cmd,get place,',
         'cmd,get ant,',
+        'cmd,get lock,',
         'cmd,search,',
         'cmd,manual,1,3.00',
         'cmd,dir,180.00,21.50,-90.00,',
         'cmd,ant,40.00,25.32,-2.35,3.50,10.00,0.50,',
+        'cmd,set lock,4.20,',
+        'cmd,get lock,',
         'cmd,stop,'
     ]
     print('Offline demo mode')

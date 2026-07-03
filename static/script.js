@@ -16,6 +16,9 @@ let targetEl = 0;
 // Флаг, показывать ли диапазоны поиска (только при автоматическом наведении)
 let showSearchRange = false;
 
+// Порог захвата
+let lockThreshold = null;
+
 // Загрузка спутников с сервера
 async function loadSatellites() {
     try {
@@ -227,6 +230,51 @@ async function saveAntennaParams() {
     }
 }
 
+// --- Загрузка и установка порога захвата ---
+async function loadLockThreshold() {
+    try {
+        const resp = await fetch('/api/lock_threshold');
+        if (resp.ok) {
+            const data = await resp.json();
+            lockThreshold = data.value;
+            document.getElementById('lockThresholdDisplay').textContent = lockThreshold.toFixed(2);
+            document.getElementById('lockThresholdInput').value = lockThreshold.toFixed(2);
+        }
+    } catch (e) {
+        console.warn('Error loading lock threshold:', e);
+    }
+}
+
+async function setLockThreshold() {
+    const input = document.getElementById('lockThresholdInput');
+    const value = parseFloat(input.value);
+    if (isNaN(value)) {
+        alert('Введите корректное число');
+        return;
+    }
+    try {
+        const resp = await fetch('/api/lock_threshold', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value: value })
+        });
+        if (resp.ok) {
+            lockThreshold = value;
+            document.getElementById('lockThresholdDisplay').textContent = value.toFixed(2);
+            const statusDiv = document.getElementById('lockThresholdStatus');
+            statusDiv.innerText = '✓ Порог установлен';
+            statusDiv.style.color = '#27ae60';
+            setTimeout(() => {
+                if (statusDiv.innerText.includes('✓')) statusDiv.innerText = '';
+            }, 5000);
+        } else {
+            alert('Ошибка при установке порога');
+        }
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
 // --- Остальные функции ---
 document.addEventListener('DOMContentLoaded', () => {
     azimuthCanvas = document.getElementById('azimuthCanvas');
@@ -237,6 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
     drawElevation(0);
     loadSatellites();
     loadAntennaParams();
+    loadLockThreshold();
 });
 
 async function fetchTelemetry() {

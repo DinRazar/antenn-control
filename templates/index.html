@@ -32,7 +32,7 @@
             <div class="telemetry-item">
                 <div class="label">Уровень сигнала</div>
                 <div class="value" id="agc">-- В</div>
-                <div class="target">Порог: 3 В</div>
+                <div class="target">Порог: <span id="lockThresholdDisplay">--</span> В</div>
             </div>
             <div class="telemetry-item status-item">
                 <div class="label">Статус</div>
@@ -147,14 +147,8 @@
             <input type="number" step="0.01" id="pol" placeholder="0.00">
             <button onclick="setPosition()" class="btn-set">Уст</button>
         </div>
-        <!-- <div class="input-group">
-            <label>Скорость:</label>
-            <input type="number" step="0.1" id="speed" value="3.0">
-            <label>Напр:</label>
-            <input type="number" id="adj" value="1">
-            <button onclick="setSpeed()" class="btn-set">Уст</button>
-        </div> -->
-           <!-- Параметры антенны -->
+
+        <!-- Параметры антенны -->
         <div class="params-panel">
             <h2>Параметры антенны</h2>
             <div class="params-grid">
@@ -182,9 +176,16 @@
                     <label>Поляризация калибровки</label>
                     <input type="number" step="0.01" id="cal_pol" placeholder="0.00">
                 </div>
+                <!-- НОВЫЙ БЛОК: Порог захвата -->
+                <div class="param-item">
+                    <label>Порог захвата</label>
+                    <input type="number" step="0.01" id="lockThresholdInput" placeholder="0.00">
+                </div>
             </div>
             <button onclick="saveAntennaParams()" class="btn-save-params">Сохранить параметры</button>
+            <button onclick="setLockThreshold()" class="btn-save-params" style="margin-left:10px;">Установить порог</button>
             <div id="paramsStatus" class="status-msg"></div>
+            <div id="lockThresholdStatus" class="status-msg"></div>
         </div>
 
         <div id="cmdStatus" class="status-msg"></div>

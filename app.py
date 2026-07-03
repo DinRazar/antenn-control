@@ -71,12 +71,14 @@ class AntennaSession:
         self.running = True
         self.buffer = ''
         self.antenna_params = None  # храним последние параметры [search_az, cal_el, cal_pol, cal_az, search_el, search_step]
+        self.lock_threshold = None   # порог захвата
         self.read_thread = threading.Thread(target=self._read_loop, daemon=True)
         self.read_thread.start()
         self.poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
         self.poll_thread.start()
         # Запросим параметры антенны при старте
         self.request_antenna_params()
+        self.request_lock_threshold()
 
     def send_payload(self, payload):
         self.transport.write_frame(build_frame(payload))
@@ -84,6 +86,10 @@ class AntennaSession:
     def request_antenna_params(self):
         """Отправить запрос на получение параметров антенны"""
         self.send_payload('cmd,get ant,')
+
+    def request_lock_threshold(self):
+        """Запросить текущий порог захвата"""
+        self.send_payload('cmd,get lock,')
 
     def _read_loop(self):
         while self.running:
@@ -108,17 +114,26 @@ class AntennaSession:
                 # Парсим параметры антенны
                 # Формат: $cmd,ant,val1,val2,val3,val4,val5,val6,*xx
                 try:
-                    # Разбиваем по запятой
                     items = line.split(',')
                     if len(items) >= 8:
-                        # items[0] = '$cmd', items[1] = 'ant', items[2..7] = значения, items[8] = '*xx'
                         vals = [float(items[i]) for i in range(2, 8)]
                         self.antenna_params = vals
                         print(f"Antenna params updated: {vals}")
                 except Exception as e:
                     print(f"Error parsing antenna params: {e}")
+            elif line.startswith('$cmd,lock,'):
+                # Формат: $cmd,lock,value,*xx
+                try:
+                    parts_line = line.split(',')
+                    if len(parts_line) >= 3:
+                        val_str = parts_line[2].split('*')[0]  # отрезаем чексумму
+                        self.lock_threshold = float(val_str)
+                        print(f"Lock threshold updated: {self.lock_threshold}")
+                except Exception as e:
+                    print(f"Error parsing lock threshold: {e}")
+            elif line.startswith('$cmd,set lock ok') or line.startswith('$cmd,set lock ack'):
+                print(f"Lock threshold set ack: {line}")
             elif line.startswith('$cmd,ant ack') or line.startswith('$cmd,ant ok'):
-                # Подтверждение установки параметров
                 print(f"Antenna params ack: {line}")
 
     def _poll_loop(self):
@@ -319,6 +334,26 @@ def set_antenna_params():
     payload = f'cmd,ant,{search_az:.2f},{cal_el:.2f},{cal_pol:.2f},{cal_az:.2f},{search_el:.2f},{search_step:.2f},'
     session.send_payload(payload)
     return jsonify({'status': 'sent'})
+
+# ---- НОВЫЙ API для порога захвата ----
+@app.route('/api/lock_threshold', methods=['GET'])
+def get_lock_threshold():
+    if session.lock_threshold is not None:
+        return jsonify({'value': session.lock_threshold})
+    else:
+        return jsonify({'error': 'No data'}), 404
+
+@app.route('/api/lock_threshold', methods=['POST'])
+def set_lock_threshold():
+    data = request.get_json()
+    try:
+        value = float(data['value'])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({'error': 'Invalid value'}), 400
+    
+    payload = f'cmd,set lock,{value:.2f},'
+    session.send_payload(payload)
+    return jsonify({'status': 'ok'})
 
 # Запуск
 def main():
