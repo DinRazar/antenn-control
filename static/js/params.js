@@ -1,0 +1,110 @@
+// --- Параметры антенны ---
+async function loadAntennaParams() {
+    try {
+        const resp = await fetch('/api/antenna_params');
+        if (resp.ok) {
+            const data = await resp.json();
+            document.getElementById('search_az').value = data.search_az;
+            document.getElementById('cal_el').value = data.cal_el;
+            document.getElementById('cal_pol').value = data.cal_pol;
+            document.getElementById('cal_az').value = data.cal_az;
+            document.getElementById('search_el').value = data.search_el;
+            document.getElementById('search_step').value = data.search_step;
+            // Сохраняем для визуализации
+            App.searchAz = parseFloat(data.search_az) || 0;
+            App.searchEl = parseFloat(data.search_el) || 0;
+            // Перерисовываем
+            drawAzimuth(App.currentAz);
+            drawElevation(App.currentEl);
+        }
+    } catch (e) {
+        console.warn('Error loading antenna params:', e);
+    }
+}
+
+async function saveAntennaParams() {
+    const params = {
+        search_az: parseFloat(document.getElementById('search_az').value),
+        cal_el: parseFloat(document.getElementById('cal_el').value),
+        cal_pol: parseFloat(document.getElementById('cal_pol').value),
+        cal_az: parseFloat(document.getElementById('cal_az').value),
+        search_el: parseFloat(document.getElementById('search_el').value),
+        search_step: parseFloat(document.getElementById('search_step').value)
+    };
+    for (let key in params) {
+        if (isNaN(params[key])) {
+            alert('Все поля должны быть числами');
+            return;
+        }
+    }
+    try {
+        const resp = await fetch('/api/antenna_params', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params)
+        });
+        if (resp.ok) {
+            // Обновляем локальные переменные
+            App.searchAz = params.search_az;
+            App.searchEl = params.search_el;
+            // Перерисовываем
+            drawAzimuth(App.currentAz);
+            drawElevation(App.currentEl);
+            const statusDiv = document.getElementById('paramsStatus');
+            statusDiv.innerText = '✓ Параметры сохранены';
+            statusDiv.style.color = '#27ae60';
+            setTimeout(() => {
+                if (statusDiv.innerText.includes('✓')) statusDiv.innerText = '';
+            }, 5000);
+        } else {
+            alert('Ошибка сохранения');
+        }
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+// --- Загрузка и установка порога захвата ---
+async function loadLockThreshold() {
+    try {
+        const resp = await fetch('/api/lock_threshold');
+        if (resp.ok) {
+            const data = await resp.json();
+            App.lockThreshold = data.value;
+            document.getElementById('lockThresholdDisplay').textContent = App.lockThreshold.toFixed(2);
+            document.getElementById('lockThresholdInput').value = App.lockThreshold.toFixed(2);
+        }
+    } catch (e) {
+        console.warn('Error loading lock threshold:', e);
+    }
+}
+
+async function setLockThreshold() {
+    const input = document.getElementById('lockThresholdInput');
+    const value = parseFloat(input.value);
+    if (isNaN(value)) {
+        alert('Введите корректное число');
+        return;
+    }
+    try {
+        const resp = await fetch('/api/lock_threshold', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value: value })
+        });
+        if (resp.ok) {
+            App.lockThreshold = value;
+            document.getElementById('lockThresholdDisplay').textContent = value.toFixed(2);
+            const statusDiv = document.getElementById('lockThresholdStatus');
+            statusDiv.innerText = '✓ Порог установлен';
+            statusDiv.style.color = '#27ae60';
+            setTimeout(() => {
+                if (statusDiv.innerText.includes('✓')) statusDiv.innerText = '';
+            }, 5000);
+        } else {
+            alert('Ошибка при установке порога');
+        }
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
