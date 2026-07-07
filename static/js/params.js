@@ -1,4 +1,3 @@
-// --- Параметры антенны ---
 async function loadAntennaParams() {
     try {
         const resp = await fetch('/api/antenna_params');
@@ -10,10 +9,8 @@ async function loadAntennaParams() {
             document.getElementById('cal_az').value = data.cal_az;
             document.getElementById('search_el').value = data.search_el;
             document.getElementById('search_step').value = data.search_step;
-            // Сохраняем для визуализации
             App.searchAz = parseFloat(data.search_az) || 0;
             App.searchEl = parseFloat(data.search_el) || 0;
-            // Перерисовываем
             drawAzimuth(App.currentAz);
             drawElevation(App.currentEl);
         }
@@ -44,18 +41,10 @@ async function saveAntennaParams() {
             body: JSON.stringify(params)
         });
         if (resp.ok) {
-            // Обновляем локальные переменные
             App.searchAz = params.search_az;
             App.searchEl = params.search_el;
-            // Перерисовываем
             drawAzimuth(App.currentAz);
             drawElevation(App.currentEl);
-            const statusDiv = document.getElementById('paramsStatus');
-            statusDiv.innerText = '✓ Параметры сохранены';
-            statusDiv.style.color = '#27ae60';
-            setTimeout(() => {
-                if (statusDiv.innerText.includes('✓')) statusDiv.innerText = '';
-            }, 5000);
         } else {
             alert('Ошибка сохранения');
         }
@@ -64,7 +53,6 @@ async function saveAntennaParams() {
     }
 }
 
-// --- Загрузка и установка порога захвата ---
 async function loadLockThreshold() {
     try {
         const resp = await fetch('/api/lock_threshold');
@@ -90,17 +78,11 @@ async function setLockThreshold() {
         const resp = await fetch('/api/lock_threshold', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ value: value })
+            body: JSON.stringify({ value })
         });
         if (resp.ok) {
             App.lockThreshold = value;
             document.getElementById('lockThresholdDisplay').textContent = value.toFixed(2);
-            const statusDiv = document.getElementById('lockThresholdStatus');
-            statusDiv.innerText = '✓ Порог установлен';
-            statusDiv.style.color = '#27ae60';
-            setTimeout(() => {
-                if (statusDiv.innerText.includes('✓')) statusDiv.innerText = '';
-            }, 5000);
         } else {
             alert('Ошибка при установке порога');
         }

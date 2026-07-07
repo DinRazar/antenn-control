@@ -4,15 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Antenna Control</title>
-    <link rel="stylesheet" href="/static/style.css">
-    <script src="/static/script.js" defer></script>
+    <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
 <div class="container">
-    <h1>Управление антенной</h1>
+    <!-- Шапка -->
+    <div class="header">
+        <h1>Управление антенной</h1>
+        <div class="nav">
+            <button class="nav-btn active" data-page="index">Управление</button>
+            <button class="nav-btn" data-page="params">Параметры</button>
+        </div>
+    </div>
 
-    <!-- Телеметрия сверху -->
-    <div class="telemetry-panel">
+    <!-- Телеметрия -->
+    <div class="telemetry-panel" id="telemetryPanel">
         <div class="telemetry-grid">
             <div class="telemetry-item">
                 <div class="label">Азимут</div>
@@ -36,7 +42,7 @@
             </div>
             <div class="telemetry-item status-item">
                 <div class="label">Статус</div>
-                <div class="value status-text" id="status">--</div>
+                <div class="value" id="status">--</div>
                 <div class="target" id="status_code">Код: --</div>
             </div>
             <div class="telemetry-item">
@@ -47,117 +53,113 @@
         </div>
     </div>
 
-    <!-- Управление спутниками -->
-    <div class="satellite-panel">
-        <div class="satellite-header">
-            <h2>Спутники</h2>
-            <button onclick="showAddSatellite()" class="btn-add">+ Добавить</button>
+    <!-- Страница Управление -->
+    <div id="page-index">
+        <!-- Визуализация -->
+        <div class="panel">
+            <div class="panel-title">Положение антенны</div>
+            <div class="viz-container">
+                <div class="viz-box">
+                    <div class="viz-label">Азимут</div>
+                    <canvas id="azimuthCanvas" width="280" height="280"></canvas>
+                    <div class="viz-value" id="azimuthValue">0°</div>
+                </div>
+                <div class="viz-box">
+                    <div class="viz-label">Угол места</div>
+                    <canvas id="elevationCanvas" width="280" height="280"></canvas>
+                    <div class="viz-value" id="elevationValue">0°</div>
+                </div>
+            </div>
         </div>
-        
-        <div class="satellite-controls">
-            <div class="satellite-select">
-                <label>Выберите спутник</label>
-                <select id="satelliteSelect" onchange="selectSatellite()">
-                    <option value="">-- Выберите --</option>
-                </select>
-            </div>
-            <div class="satellite-info" id="satelliteInfo">
-                <div class="info-item">
-                    <span class="info-label">Позиция</span>
-                    <span class="info-value" id="satPos">--</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Частота</span>
-                    <span class="info-value" id="satFreq">--</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Поляризация</span>
-                    <span class="info-value" id="satPol">--</span>
+
+        <!-- Режим управления -->
+        <div class="panel">
+            <div class="panel-title">Режим управления</div>
+            <div class="control-group">
+                <div class="mode-toggle" id="modeToggle">
+                    <button class="btn active" data-mode="auto">Автоматический</button>
+                    <button class="btn" data-mode="manual">Ручной</button>
                 </div>
             </div>
-            <button onclick="pointToSatellite()" class="btn-point">Применить</button>
         </div>
-        
-        <!-- Модальное окно добавления спутника -->
-        <div id="satModal" class="modal">
-            <div class="modal-content">
-                <span class="modal-close" onclick="closeModal()">&times;</span>
-                <h3>Добавить спутник</h3>
-                <div class="modal-fields">
-                    <div class="field-group">
-                        <label>Название</label>
-                        <input type="text" id="satName" placeholder="Напр. 42">
+
+        <!-- Автоматическое наведение -->
+        <div class="panel" id="autoMode">
+            <div class="panel-title">Наведение на спутник</div>
+            <div class="satellite-controls">
+                <div class="satellite-select">
+                    <label>Выберите спутник</label>
+                    <select id="satelliteSelect" onchange="selectSatellite()">
+                        <option value="">-- Выберите --</option>
+                    </select>
+                </div>
+                <div class="satellite-info">
+                    <div class="info-item">
+                        <span class="info-label">Позиция</span>
+                        <span class="info-value" id="satPos">--</span>
                     </div>
-                    <div class="field-group">
-                        <label>Позиция (градусы)</label>
-                        <input type="number" step="0.1" id="satPosition" placeholder="42.00">
-                        <span class="hint">Восток +, Запад -</span>
+                    <div class="info-item">
+                        <span class="info-label">Частота</span>
+                        <span class="info-value" id="satFreq">--</span>
                     </div>
-                    <div class="field-group">
-                        <label>Частота (МГц)</label>
-                        <input type="number" step="0.01" id="satFrequency" placeholder="11701.50">
-                    </div>
-                    <div class="field-group">
-                        <label>Поляризация</label>
-                        <select id="satPolarization">
-                            <option value="0">Горизонтальная</option>
-                            <option value="1" selected>Вертикальная</option>
-                        </select>
+                    <div class="info-item">
+                        <span class="info-label">Поляризация</span>
+                        <span class="info-value" id="satPol">--</span>
                     </div>
                 </div>
-                <button onclick="saveSatellite()" class="btn-save">Сохранить</button>
+                <button onclick="pointToSatellite()" class="btn btn-primary">Навести</button>
+                <button onclick="showAddSatellite()" class="btn btn-outline">+ Добавить</button>
             </div>
+
+            <!-- Кнопки управления -->
+            <div class="control-group mt-12">
+                <button onclick="sendCommand('cmd,stop,')" class="btn btn-outline">Стоп</button>
+                <button onclick="sendCommand('cmd,reset,')" class="btn btn-outline">Развернуть</button>
+                <button onclick="sendCommand('cmd,search,')" class="btn btn-outline">Поиск</button>
+                <button onclick="sendCommand('cmd,stow,')" class="btn btn-outline">Сложить</button>
+            </div>
+        </div>
+
+        <!-- Ручное управление -->
+        <div class="panel hidden" id="manualMode">
+            <div class="panel-title">Ручное управление</div>
+            
+            <!-- <div class="control-group">
+                <button onclick="manualSpeed()" class="btn btn-outline">Скорость</button>
+                <button onclick="manualPosition()" class="btn btn-outline">Позиция</button>
+            </div> -->
+            
+            <div class="input-group">
+                <label>Аз:</label>
+                <input type="number" step="0.01" id="az" placeholder="0.00">
+                <label>Мес:</label>
+                <input type="number" step="0.01" id="el" placeholder="0.00">
+                <label>Пол:</label>
+                <input type="number" step="0.01" id="pol" placeholder="0.00">
+                <button onclick="setPosition()" class="btn btn-outline">Установить</button>
+            </div>
+            
+            <!-- <div class="input-group">
+                <label>Скорость:</label>
+                <input type="number" step="0.1" id="speed" value="3.0">
+                <label>Напр:</label>
+                <input type="number" id="adj" value="1">
+                <button onclick="setSpeed()" class="btn btn-outline">Установить</button>
+            </div> -->
         </div>
     </div>
 
-    <!-- Визуализация антенны снизу -->
-    <div class="visualization-panel">
-        <div class="viz-container">
-            <div class="viz-box">
-                <div class="viz-label">Азимут</div>
-                <canvas id="azimuthCanvas" width="280" height="280"></canvas>
-                <div class="viz-value" id="azimuthValue">0°</div>
-            </div>
-            <div class="viz-box">
-                <div class="viz-label">Угол места</div>
-                <canvas id="elevationCanvas" width="280" height="280"></canvas>
-                <div class="viz-value" id="elevationValue">0°</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Управление -->
-    <div class="control-panel">
-        <div class="button-group">
-            <button onclick="sendCommand('cmd,stop,')" class="btn-stop">Стоп</button>
-            <button onclick="sendCommand('cmd,reset,')" class="btn-reset">Развернуть</button>
-            <button onclick="sendCommand('cmd,search,')" class="btn-search">Поиск</button>
-            <button onclick="sendCommand('cmd,stow,')" class="btn-stow">Сложить</button>
-        </div>
-        <div class="button-group">
-            <button onclick="manualSpeed()" class="btn-manual">Скорость</button>
-            <button onclick="manualPosition()" class="btn-manual">Позиция</button>
-        </div>
-        <div class="input-group">
-            <label>Аз:</label>
-            <input type="number" step="0.01" id="az" placeholder="0.00">
-            <label>Мес:</label>
-            <input type="number" step="0.01" id="el" placeholder="0.00">
-            <label>Пол:</label>
-            <input type="number" step="0.01" id="pol" placeholder="0.00">
-            <button onclick="setPosition()" class="btn-set">Уст</button>
-        </div>
-
-        <!-- Параметры антенны -->
-        <div class="params-panel">
-            <h2>Параметры антенны</h2>
+    <!-- Страница Параметры -->
+    <div id="page-params" class="hidden">
+        <div class="panel">
+            <div class="panel-title">Параметры антенны</div>
             <div class="params-grid">
                 <div class="param-item">
-                    <label>Азимут поиска</label>
+                    <label>Диапозон поиска по азимуту</label>
                     <input type="number" step="0.01" id="search_az" placeholder="0.00">
                 </div>
                 <div class="param-item">
-                    <label>Угол места поиска</label>
+                    <label>Диапозон поиска по углу места</label>
                     <input type="number" step="0.01" id="search_el" placeholder="0.00">
                 </div>
                 <div class="param-item">
@@ -165,31 +167,66 @@
                     <input type="number" step="0.01" id="search_step" placeholder="0.00">
                 </div>
                 <div class="param-item">
-                    <label>Азимут калибровки</label>
+                    <label>Калибровка азимута</label>
                     <input type="number" step="0.01" id="cal_az" placeholder="0.00">
                 </div>
                 <div class="param-item">
-                    <label>Угол места калибровки</label>
+                    <label>Калибровка угла места</label>
                     <input type="number" step="0.01" id="cal_el" placeholder="0.00">
                 </div>
                 <div class="param-item">
-                    <label>Поляризация калибровки</label>
+                    <label>Калибровка поляризации</label>
                     <input type="number" step="0.01" id="cal_pol" placeholder="0.00">
                 </div>
-                <!-- НОВЫЙ БЛОК: Порог захвата -->
                 <div class="param-item">
                     <label>Порог захвата</label>
                     <input type="number" step="0.01" id="lockThresholdInput" placeholder="0.00">
                 </div>
             </div>
-            <button onclick="saveAntennaParams()" class="btn-save-params">Сохранить параметры</button>
-            <button onclick="setLockThreshold()" class="btn-save-params" style="margin-left:10px;">Установить порог</button>
-            <div id="paramsStatus" class="status-msg"></div>
-            <div id="lockThresholdStatus" class="status-msg"></div>
+            <div class="params-actions">
+                <button onclick="saveAntennaParams()" class="btn btn-primary">Сохранить параметры</button>
+                <button onclick="setLockThreshold()" class="btn btn-outline">Установить порог</button>
+            </div>
         </div>
-
-        <div id="cmdStatus" class="status-msg"></div>
     </div>
 </div>
+
+<!-- Модальное окно -->
+<div id="satModal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeModal()">&times;</span>
+        <h3>Добавить спутник</h3>
+        <div class="modal-fields">
+            <div class="field-group">
+                <label>Название</label>
+                <input type="text" id="satName" placeholder="Напр. 42">
+            </div>
+            <div class="field-group">
+                <label>Позиция (градусы)</label>
+                <input type="number" step="0.1" id="satPosition" placeholder="42.00">
+                <span class="hint">Восток +, Запад -</span>
+            </div>
+            <div class="field-group">
+                <label>Частота (МГц)</label>
+                <input type="number" step="0.01" id="satFrequency" placeholder="11701.50">
+            </div>
+            <div class="field-group">
+                <label>Поляризация</label>
+                <select id="satPolarization">
+                    <option value="0">Горизонтальная</option>
+                    <option value="1" selected>Вертикальная</option>
+                </select>
+            </div>
+        </div>
+        <button onclick="saveSatellite()" class="btn-save-modal">Сохранить</button>
+    </div>
+</div>
+
+<script src="/static/js/app.js"></script>
+<script src="/static/js/draw.js"></script>
+<script src="/static/js/telemetry.js"></script>
+<script src="/static/js/satellites.js"></script>
+<script src="/static/js/params.js"></script>
+<script src="/static/js/commands.js"></script>
 </body>
 </html>
