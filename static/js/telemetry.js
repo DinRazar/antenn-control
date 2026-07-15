@@ -15,13 +15,13 @@ async function fetchTelemetry() {
         App.targetAz = tarAz;
         App.targetEl = tarEl;
         
-        // Определяем режим отображения
+        // Определяем режим отображения диапазона поиска и целевых указателей
+        // Показываем ТОЛЬКО во время активного автоматического наведения (коды 49, 50, 52)
         const statusCode = data.status_code;
         const statusText = data.status || '';
-        const autoCodes = [49, 50, 51, 52, 81, 82, 83, 84];
-        App.showSearchRange = autoCodes.includes(statusCode) || 
-                               statusText.includes('Наведение') || 
-                               statusText.includes('Сопровождение');
+        // Только коды наведения: 49 - Наведение, 50 - Ошибка при наведении, 52 - Наведение приостановлено
+        const autoCodes = [49, 50, 52];
+        App.showSearchRange = autoCodes.includes(statusCode);
         
         const elDiff = curEl - App.prevEl;
         const isDeploying = statusText.includes('Развёртывание') || statusCode === 17 || statusCode === 19;

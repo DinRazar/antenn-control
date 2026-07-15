@@ -12,7 +12,7 @@ function drawAzimuth(angle) {
     
     ctx.clearRect(0, 0, w, h);
     
-    // Диапазон поиска
+    // Диапазон поиска (рисуем только если разрешено)
     if (App.showSearchRange && App.searchAz > 0 && App.targetAz >= 0) {
         const half = App.searchAz / 2;
         let startAngle = App.targetAz - half;
@@ -62,8 +62,8 @@ function drawAzimuth(angle) {
         ctx.fillText(dirs[i], cx + Math.cos(rad) * (radius - 25), cy + Math.sin(rad) * (radius - 25));
     }
     
-    // Целевая стрелка
-    if (App.targetAz >= 0) {
+    // Целевая стрелка (только при активном наведении)
+    if (App.showSearchRange && App.targetAz >= 0) {
         const rad = (App.targetAz - 90) * Math.PI / 180;
         const len = radius - 12;
         const head = 8;
@@ -86,7 +86,7 @@ function drawAzimuth(angle) {
         ctx.fill();
     }
     
-    // Текущая стрелка
+    // Текущая стрелка (всегда рисуется)
     const rad = (angle - 90) * Math.PI / 180;
     const len = radius - 12;
     const head = 10;
@@ -122,7 +122,7 @@ function drawElevation(angle) {
     
     ctx.clearRect(0, 0, w, h);
     
-    // Диапазон поиска
+    // Диапазон поиска (рисуем только если разрешено)
     if (App.showSearchRange && App.searchEl > 0 && App.targetEl >= 0) {
         let low = App.targetEl - App.searchEl;
         let high = App.targetEl + App.searchEl;
@@ -184,8 +184,8 @@ function drawElevation(angle) {
         ctx.fillText(labels[i][0] + '°', cx + Math.cos(rad) * (radius - 25), cy - Math.sin(rad) * (radius - 25) + off);
     }
     
-    // Целевая точка
-    if (App.targetEl >= 0) {
+    // Целевая точка (только при активном наведении)
+    if (App.showSearchRange && App.targetEl >= 0) {
         const displayAngle = Math.max(0, Math.min(90, App.targetEl));
         const rad = (180 - displayAngle) * Math.PI / 180;
         const len = radius - 8;
@@ -205,7 +205,7 @@ function drawElevation(angle) {
         ctx.fill();
     }
     
-    // Текущая антенна
+    // Текущая антенна (всегда рисуется)
     const displayAngle = Math.max(0, Math.min(90, angle));
     const rad = (180 - displayAngle) * Math.PI / 180;
     const len = radius - 5;
