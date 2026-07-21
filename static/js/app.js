@@ -47,6 +47,7 @@ const App = {
         loadSatellites();
         loadAntennaParams();
         loadLockThreshold();
+        loadPlaceParams();  // <-- добавлен вызов
 
         // Запуск цикла телеметрии
         setInterval(fetchTelemetry, 333);

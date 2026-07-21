@@ -72,13 +72,17 @@ class AntennaSession:
         self.buffer = ''
         self.antenna_params = None  # храним последние параметры [search_az, cal_el, cal_pol, cal_az, search_el, search_step]
         self.lock_threshold = None   # порог захвата
+        self.place_params = None     # [lon, lat]
         self.read_thread = threading.Thread(target=self._read_loop, daemon=True)
         self.read_thread.start()
         self.poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
         self.poll_thread.start()
-        # Запросим параметры антенны при старте
+        # Даём время на установку соединения и запуск потоков
+        time.sleep(1.5)
+        # Запросим параметры при старте
         self.request_antenna_params()
         self.request_lock_threshold()
+        self.request_place_params()
 
     def send_payload(self, payload):
         self.transport.write_frame(build_frame(payload))
@@ -90,6 +94,10 @@ class AntennaSession:
     def request_lock_threshold(self):
         """Запросить текущий порог захвата"""
         self.send_payload('cmd,get lock,')
+
+    def request_place_params(self):
+        """Запросить текущие координаты места"""
+        self.send_payload('cmd,get place,')
 
     def _read_loop(self):
         while self.running:
@@ -126,15 +134,28 @@ class AntennaSession:
                 try:
                     parts_line = line.split(',')
                     if len(parts_line) >= 3:
-                        val_str = parts_line[2].split('*')[0]  # отрезаем чексумму
+                        val_str = parts_line[2].split('*')[0]
                         self.lock_threshold = float(val_str)
                         print(f"Lock threshold updated: {self.lock_threshold}")
                 except Exception as e:
                     print(f"Error parsing lock threshold: {e}")
+            elif line.startswith('$cmd,place,'):
+                # Формат: $cmd,place,lon,lat,heading,*xx
+                try:
+                    items = line.split(',')
+                    if len(items) >= 5:
+                        lon = float(items[2])
+                        lat = float(items[3])
+                        self.place_params = [lon, lat]
+                        print(f"Place params updated: lon={lon}, lat={lat}")
+                except Exception as e:
+                    print(f"Error parsing place params: {e}")
             elif line.startswith('$cmd,set lock ok') or line.startswith('$cmd,set lock ack'):
                 print(f"Lock threshold set ack: {line}")
             elif line.startswith('$cmd,ant ack') or line.startswith('$cmd,ant ok'):
                 print(f"Antenna params ack: {line}")
+            elif line.startswith('$cmd,set place ok') or line.startswith('$cmd,set place ack'):
+                print(f"Place set ack: {line}")
 
     def _poll_loop(self):
         while self.running:
@@ -163,9 +184,7 @@ def load_satellites():
                 return json.load(f)
         else:
             default_satellites = [
-                {"id": 1, "name": "Sino5", "position": 110.5, "frequency": 12260.00, "polarization": 1},
-                {"id": 2, "name": "AsiaSat 7", "position": 105.5, "frequency": 12400.00, "polarization": 0},
-                {"id": 3, "name": "Satellite X", "position": -45.0, "frequency": 12600.00, "polarization": 1}
+                {"id": 1, "name": "Turk 42", "position": 42.0, "frequency": 11701.50, "polarization": 1},
             ]
             save_satellites(default_satellites)
             return default_satellites
@@ -335,7 +354,6 @@ def set_antenna_params():
     session.send_payload(payload)
     return jsonify({'status': 'sent'})
 
-# ---- НОВЫЙ API для порога захвата ----
 @app.route('/api/lock_threshold', methods=['GET'])
 def get_lock_threshold():
     if session.lock_threshold is not None:
@@ -354,6 +372,26 @@ def set_lock_threshold():
     payload = f'cmd,set lock,{value:.2f},'
     session.send_payload(payload)
     return jsonify({'status': 'ok'})
+
+# API для работы с местом (координаты)
+@app.route('/api/place_params', methods=['GET'])
+def get_place_params():
+    if session.place_params is not None:
+        return jsonify({'lon': session.place_params[0], 'lat': session.place_params[1]})
+    else:
+        return jsonify({'error': 'No data'}), 404
+
+@app.route('/api/place_params', methods=['POST'])
+def set_place_params():
+    data = request.get_json()
+    try:
+        lon = float(data['lon'])
+        lat = float(data['lat'])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({'error': 'Invalid data'}), 400
+    payload = f'cmd,place,{lon:.2f},{lat:.2f},180.00,'
+    session.send_payload(payload)
+    return jsonify({'status': 'sent'})
 
 # Запуск
 def main():

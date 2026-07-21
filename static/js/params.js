@@ -90,3 +90,40 @@ async function setLockThreshold() {
         alert('Ошибка: ' + e.message);
     }
 }
+
+// Новые функции для координат места
+async function loadPlaceParams() {
+    try {
+        const resp = await fetch('/api/place_params');
+        if (resp.ok) {
+            const data = await resp.json();
+            document.getElementById('place_lon').value = data.lon;
+            document.getElementById('place_lat').value = data.lat;
+        }
+    } catch (e) {
+        console.warn('Error loading place params:', e);
+    }
+}
+
+async function savePlaceParams() {
+    const lon = parseFloat(document.getElementById('place_lon').value);
+    const lat = parseFloat(document.getElementById('place_lat').value);
+    if (isNaN(lon) || isNaN(lat)) {
+        alert('Введите корректные значения широты и долготы');
+        return;
+    }
+    try {
+        const resp = await fetch('/api/place_params', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lon, lat })
+        });
+        if (resp.ok) {
+            alert('Координаты отправлены');
+        } else {
+            alert('Ошибка сохранения');
+        }
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
