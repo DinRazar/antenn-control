@@ -290,13 +290,15 @@ body {
 /* Визуализация */
 .viz-container {
     display: flex;
+    flex-wrap: nowrap;          /* всегда в ряд, если есть место */
     justify-content: center;
-    gap: 40px;
-    flex-wrap: wrap;
+    gap: 20px;
 }
 
 .viz-box {
     text-align: center;
+    flex: 1 1 auto;
+    max-width: 280px;
 }
 
 .viz-label {
@@ -313,8 +315,8 @@ canvas {
     border-radius: 8px;
     border: 1px solid #e5e5e5;
     width: 100%;
-    max-width: 280px;
     height: auto;
+    aspect-ratio: 1/1;         /* сохраняем квадрат */
 }
 
 .viz-value {
@@ -322,6 +324,24 @@ canvas {
     font-weight: 500;
     color: #1a1a1a;
     margin-top: 6px;
+}
+
+/* ===== ДВЕ КОЛОНКИ ===== */
+.dashboard {
+    display: flex;
+    flex-wrap: wrap;            /* перенос на новую строку при нехватке места */
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.dashboard-left {
+    flex: 1 1 320px;           /* минимальная ширина 320px, может расти */
+    min-width: 280px;
+}
+
+.dashboard-right {
+    flex: 2 1 500px;           /* занимает больше места, min 500px */
+    min-width: 400px;
 }
 
 /* Параметры */
@@ -473,18 +493,32 @@ canvas {
     margin-bottom: 12px;
 }
 
-@media (max-width: 900px) {
+/* ===== АДАПТИВНОСТЬ ===== */
+@media (max-width: 1000px) {
     .telemetry-grid {
         grid-template-columns: repeat(3, 1fr);
     }
     .params-grid {
         grid-template-columns: repeat(2, 1fr);
     }
+    /* На узких экранах картинки могут стать в столбик, если нужно */
+    .viz-container {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    .dashboard-right {
+        min-width: 0;
+        flex: 1 1 100%;
+    }
+    .dashboard-left {
+        min-width: 0;
+        flex: 1 1 100%;
+    }
 }
 
 @media (max-width: 600px) {
     .telemetry-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: 1fr 1fr;
     }
     .params-grid {
         grid-template-columns: 1fr;
@@ -504,5 +538,17 @@ canvas {
     }
     .nav {
         justify-content: center;
+    }
+    .input-group {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    .dashboard {
+        flex-direction: column;
+    }
+    .dashboard-left,
+    .dashboard-right {
+        flex: 1 1 100%;
+        min-width: 0;
     }
 }

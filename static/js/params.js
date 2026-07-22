@@ -45,11 +45,14 @@ async function saveAntennaParams() {
             App.searchEl = params.search_el;
             drawAzimuth(App.currentAz);
             drawElevation(App.currentEl);
+            return true;
         } else {
             alert('Ошибка сохранения');
+            return false;
         }
     } catch (e) {
         alert('Ошибка: ' + e.message);
+        return false;
     }
 }
 
@@ -91,7 +94,7 @@ async function setLockThreshold() {
     }
 }
 
-// Новые функции для координат места
+// Функция загрузки координат места
 async function loadPlaceParams() {
     try {
         const resp = await fetch('/api/place_params');
@@ -105,6 +108,7 @@ async function loadPlaceParams() {
     }
 }
 
+// ИСПРАВЛЕННАЯ функция сохранения координат
 async function savePlaceParams() {
     const lon = parseFloat(document.getElementById('place_lon').value);
     const lat = parseFloat(document.getElementById('place_lat').value);
@@ -113,15 +117,23 @@ async function savePlaceParams() {
         return;
     }
     try {
+        // 1. Отправляем координаты
         const resp = await fetch('/api/place_params', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ lon, lat })
         });
         if (resp.ok) {
-            alert('Координаты отправлены');
+            // 2. После успешной установки координат принудительно отправляем параметры антенны,
+            // чтобы антенна перезаписала диапазоны поиска (они могли сброситься или не обновиться)
+            const antSuccess = await saveAntennaParams();
+            if (antSuccess) {
+                alert('Координаты и параметры поиска обновлены');
+            } else {
+                alert('Координаты установлены, но параметры поиска не обновлены');
+            }
         } else {
-            alert('Ошибка сохранения');
+            alert('Ошибка при установке координат');
         }
     } catch (e) {
         alert('Ошибка: ' + e.message);
