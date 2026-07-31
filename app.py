@@ -184,7 +184,9 @@ def load_satellites():
                 return json.load(f)
         else:
             default_satellites = [
-                {"id": 1, "name": "Turk 42", "position": 42.0, "frequency": 11701.50, "polarization": 1},
+                {"id": 1, "name": "Turksat 42", "position": 42.0, "frequency": 11701.50, "polarization": 1},
+                {"id": 2, "name": "Eutelsat 70", "position": 70.5, "frequency": 11999.50, "polarization": 0},
+                {"id": 3, "name": "Astra 1N", "position": 19.2, "frequency": 11441.00, "polarization": 0}
             ]
             save_satellites(default_satellites)
             return default_satellites

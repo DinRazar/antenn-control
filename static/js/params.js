@@ -48,6 +48,7 @@ async function saveAntennaParams() {
             return true;
         } else {
             alert('Ошибка сохранения');
+            
             return false;
         }
     } catch (e) {
