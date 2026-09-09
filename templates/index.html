@@ -65,6 +65,7 @@
                         <div class="mode-toggle" id="modeToggle">
                             <button class="btn active" data-mode="auto">Автоматический</button>
                             <button class="btn" data-mode="manual">Ручной</button>
+                            <button class="btn" data-mode="reference">Референсный</button>
                         </div>
                     </div>
                 </div>
@@ -125,7 +126,70 @@
                         <button onclick="sendCommand('cmd,stow,')" class="btn btn-outline">Сложить</button>
                     </div>
                 </div>
+
+                <!-- РЕФЕРЕНСНЫЙ РЕЖИМ (НОВЫЙ) -->
+                <div class="panel hidden" id="referenceMode">
+                    <div class="panel-title">Референсный режим</div>
+                    
+                    <!-- Референсный спутник -->
+                    <div style="margin-bottom:16px;">
+                        <div class="satellite-select" style="margin-bottom:8px;">
+                            <label>Референсный спутник (для вычисления поправки)</label>
+                            <select id="refSatelliteSelect" onchange="selectRefSatellite()">
+                                <option value="">-- Выберите --</option>
+                            </select>
+                        </div>
+                        <div class="satellite-info" style="margin-bottom:8px;">
+                            <div class="info-item">
+                                <span class="info-label">Позиция</span>
+                                <span class="info-value" id="refSatPos">--</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Частота</span>
+                                <span class="info-value" id="refSatFreq">--</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Поляризация</span>
+                                <span class="info-value" id="refSatPol">--</span>
+                            </div>
+                        </div>
+                        <!-- Кнопка "Запомнить поправку" больше не нужна, она будет вызываться автоматически -->
+                    </div>
+
+                    <!-- Отображение поправок -->
+                    <div style="background:#f8f8f8; padding:12px; border-radius:6px; margin-bottom:16px;">
+                        <div style="font-size:14px; font-weight:500; margin-bottom:6px;">Текущие поправки</div>
+                        <div style="display:flex; gap:20px; flex-wrap:wrap;">
+                            <span><strong>ΔАЗ:</strong> <span id="deltaAz">не задана</span></span>
+                            <span><strong>ΔЭЛ:</strong> <span id="deltaEl">не задана</span></span>
+                            <span><strong>ΔПОЛ:</strong> <span id="deltaPol">не задана</span></span>
+                        </div>
+                        <button onclick="resetCorrections()" class="btn btn-outline" style="margin-top:8px;">Сбросить поправки</button>
+                    </div>
+
+                    <!-- Целевой спутник (вручную) -->
+                    <div>
+                        <label style="font-weight:500;">Целевой спутник (вручную)</label>
+                        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; margin-bottom:8px;">
+                            <div>
+                                <label>Позиция (градусы)</label>
+                                <input type="number" step="0.1" id="targetPosition" placeholder="например, 42.0">
+                            </div>
+                            <div>
+                                <label>Поляризация</label>
+                                <select id="targetPolarization">
+                                    <option value="0">Горизонтальная</option>
+                                    <option value="1" selected>Вертикальная</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button onclick="performReferencePointing()" class="btn btn-primary">Навестись (референсный → целевой)</button>
+                    </div>
+                </div>
+                <!-- конец референсного режима -->
+
             </div>
+            <!-- Конец левой колонки -->
 
             <!-- Правая колонка: визуализация -->
             <div class="dashboard-right">
@@ -210,7 +274,7 @@
     </div>
 </div>
 
-<!-- Модальное окно (без изменений) -->
+<!-- Модальное окно -->
 <div id="satModal" class="modal">
     <div class="modal-content">
         <span class="modal-close" onclick="closeModal()">&times;</span>

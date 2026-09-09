@@ -31,7 +31,7 @@ async function saveAntennaParams() {
     for (let key in params) {
         if (isNaN(params[key])) {
             alert('Все поля должны быть числами');
-            return;
+            return false;
         }
     }
     try {
@@ -48,7 +48,6 @@ async function saveAntennaParams() {
             return true;
         } else {
             alert('Ошибка сохранения');
-            
             return false;
         }
     } catch (e) {
@@ -95,12 +94,14 @@ async function setLockThreshold() {
     }
 }
 
-// Функция загрузки координат места
+// Загрузка координат места (сохраняем в App)
 async function loadPlaceParams() {
     try {
         const resp = await fetch('/api/place_params');
         if (resp.ok) {
             const data = await resp.json();
+            App.placeLon = data.lon;
+            App.placeLat = data.lat;
             document.getElementById('place_lon').value = data.lon;
             document.getElementById('place_lat').value = data.lat;
         }
@@ -109,7 +110,6 @@ async function loadPlaceParams() {
     }
 }
 
-// ИСПРАВЛЕННАЯ функция сохранения координат
 async function savePlaceParams() {
     const lon = parseFloat(document.getElementById('place_lon').value);
     const lat = parseFloat(document.getElementById('place_lat').value);
@@ -118,15 +118,15 @@ async function savePlaceParams() {
         return;
     }
     try {
-        // 1. Отправляем координаты
         const resp = await fetch('/api/place_params', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ lon, lat })
         });
         if (resp.ok) {
-            // 2. После успешной установки координат принудительно отправляем параметры антенны,
-            // чтобы антенна перезаписала диапазоны поиска (они могли сброситься или не обновиться)
+            // Обновляем сохранённые координаты
+            App.placeLon = lon;
+            App.placeLat = lat;
             const antSuccess = await saveAntennaParams();
             if (antSuccess) {
                 alert('Координаты и параметры поиска обновлены');

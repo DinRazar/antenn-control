@@ -10,6 +10,7 @@ const App = {
     currentAz: 0,
     currentEl: 0,
     prevEl: 0,
+    currentPol: 0,          // <-- НОВОЕ поле для поляризации
     targetAz: 0,
     targetEl: 0,
     searchAz: 0,
@@ -24,7 +25,14 @@ const App = {
     lockThreshold: null,
 
     // Режим
-    mode: 'auto', // 'auto' | 'manual'
+    mode: 'auto', // 'auto' | 'manual' | 'reference'
+
+    // Референсные поправки
+    refCorrections: null, // { deltaAz, deltaEl, deltaPol } или null
+
+    // Координаты места (загружаются из place_params)
+    placeLon: null,
+    placeLat: null,
 
     // Инициализация
     init: function() {
@@ -47,7 +55,7 @@ const App = {
         loadSatellites();
         loadAntennaParams();
         loadLockThreshold();
-        loadPlaceParams();  // <-- добавлен вызов
+        loadPlaceParams();
 
         // Запуск цикла телеметрии
         setInterval(fetchTelemetry, 333);
@@ -64,12 +72,8 @@ const App = {
         navBtns.forEach(btn => {
             btn.addEventListener('click', function() {
                 const page = this.dataset.page;
-                
-                // Обновляем активную кнопку
                 navBtns.forEach(b => b.classList.remove('active'));
                 this.classList.add('active');
-                
-                // Показываем нужную страницу
                 Object.keys(pages).forEach(key => {
                     pages[key].classList.toggle('hidden', key !== page);
                 });
@@ -81,23 +85,27 @@ const App = {
         const buttons = document.querySelectorAll('#modeToggle .btn');
         const autoMode = document.getElementById('autoMode');
         const manualMode = document.getElementById('manualMode');
+        const referenceMode = document.getElementById('referenceMode');
 
         buttons.forEach(btn => {
             btn.addEventListener('click', function() {
                 const mode = this.dataset.mode;
-                
-                // Обновляем активную кнопку
                 buttons.forEach(b => b.classList.remove('active'));
                 this.classList.add('active');
-                
-                // Переключаем режим
                 App.mode = mode;
+                // Прячем все панели
+                autoMode.classList.add('hidden');
+                manualMode.classList.add('hidden');
+                referenceMode.classList.add('hidden');
+                // Показываем нужную
                 if (mode === 'auto') {
                     autoMode.classList.remove('hidden');
-                    manualMode.classList.add('hidden');
-                } else {
-                    autoMode.classList.add('hidden');
+                } else if (mode === 'manual') {
                     manualMode.classList.remove('hidden');
+                } else if (mode === 'reference') {
+                    referenceMode.classList.remove('hidden');
+                    // Обновляем списки в референсном режиме
+                    updateRefSatelliteSelects();
                 }
             });
         });

@@ -7,11 +7,12 @@ async function fetchTelemetry() {
         const tarAz = parseFloat(data.tar_az) || 0;
         let curEl = parseFloat(data.cur_el) || 0;
         const tarEl = parseFloat(data.tar_el) || 0;
-        const curPol = parseFloat(data.cur_pol) || 0;
+        const curPol = parseFloat(data.cur_pol) || 0;   // получаем поляризацию
         const tarPol = parseFloat(data.tar_pol) || 0;
         
         App.currentAz = curAz;
         App.currentEl = Math.max(0, curEl);
+        App.currentPol = curPol;   // сохраняем в глобальном объекте
         App.targetAz = tarAz;
         App.targetEl = tarEl;
         
