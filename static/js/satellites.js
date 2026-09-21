@@ -143,101 +143,189 @@ function pointToSatellite() {
 
 // --- НОВЫЕ ФУНКЦИИ ДЛЯ АВТОМАТИЧЕСКОГО РЕФЕРЕНСНОГО НАВЕДЕНИЯ ---
 
-// Расчёт теоретических углов по формулам из form.jpg
 function calculateAngles(satLongitude, placeLon, placeLat) {
-    // Переводим всё в радианы
     const delta = (satLongitude - placeLon) * Math.PI / 180;
     const latRad = placeLat * Math.PI / 180;
     const cosDelta = Math.cos(delta);
     const cosLat = Math.cos(latRad);
     const sinLat = Math.sin(latRad);
 
-    // Угол места
     const numerator = cosDelta * cosLat - 0.151;
     const denominator = Math.sqrt(1 - cosDelta * cosDelta * cosLat * cosLat);
     let elRad = Math.atan2(numerator, denominator);
     let elDeg = elRad * 180 / Math.PI;
 
-    // Азимут
     let azRad = Math.PI - Math.atan2(Math.tan(delta), sinLat);
     let azDeg = azRad * 180 / Math.PI;
     if (azDeg < 0) azDeg += 360;
     if (azDeg >= 360) azDeg -= 360;
 
-    // Поляризация (скос конвертера)
     let polRad = Math.atan2(Math.sin(delta), Math.tan(latRad));
     let polDeg = polRad * 180 / Math.PI;
 
     return { az: azDeg, el: elDeg, pol: polDeg };
 }
 
-// Вспомогательная функция для задержки
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Ожидание одного из кодов статуса
-async function waitForStatus(targetCodes, timeout = 60000) {
-    const start = Date.now();
-    while (Date.now() - start < timeout) {
-        const resp = await fetch('/api/telemetry');
-        const data = await resp.json();
-        const code = data.status_code;
-        if (targetCodes.includes(code)) {
-            return true;
-        }
-        await sleep(500);
-    }
-    return false;
+// --- UI-помощники для панели статуса ---
+
+function setRefStatus(text) {
+    const el = document.getElementById('refStatusDisplay');
+    if (el) el.textContent = text;
 }
 
-// Основная функция референсного наведения
-async function performReferencePointing() {
-    // 1. Проверка референсного спутника
-    const refSelect = document.getElementById('refSatelliteSelect');
-    const refId = parseInt(refSelect.value);
-    if (!refId) {
-        alert('Выберите референсный спутник');
-        return;
-    }
-    const refSat = App.satellites.find(s => s.id === refId);
-    if (!refSat) {
-        alert('Референсный спутник не найден');
-        return;
+function addStatusLog(line) {
+    const el = document.getElementById('refStatusLog');
+    if (!el) return;
+    const t = new Date().toLocaleTimeString();
+    el.innerHTML += `<div>[${t}] ${line}</div>`;
+    el.scrollTop = el.scrollHeight;
+}
+
+function clearStatusLog() {
+    const el = document.getElementById('refStatusLog');
+    if (el) el.innerHTML = '';
+    const btn = document.getElementById('skipWaitBtn');
+    if (btn) btn.style.display = 'none';
+}
+
+// --- Пропуск ожидания ---
+let skipWaitFlag = false;
+function skipReferenceWait() {
+    skipWaitFlag = true;
+    addStatusLog('>>> Пользователь пропустил ожидание');
+}
+
+// --- Ожидание завершения наведения ---
+async function waitForPointingComplete(timeoutMs = 180000) {
+    const doneCodes = [51, 81, 83];         // Наведение/Сопровождение — успех
+    const failCodes = [18, 34, 50, 68];     // Ошибки
+    const startTime = Date.now();
+    const seen = new Set();
+    let lastCode = null;
+
+    const skipBtn = document.getElementById('skipWaitBtn');
+    if (skipBtn) skipBtn.style.display = 'none';
+    setTimeout(() => {
+        if (skipBtn && skipBtn.style.display === 'none') {
+            skipBtn.style.display = 'inline-block';
+        }
+    }, 15000);
+
+    while (Date.now() - startTime < timeoutMs) {
+        if (skipWaitFlag) {
+            skipWaitFlag = false;
+            return { success: false, skipped: true, reason: 'skipped by user', seen: Array.from(seen) };
+        }
+
+        let data;
+        try {
+            const resp = await fetch('/api/telemetry');
+            data = await resp.json();
+        } catch (e) {
+            await sleep(300);
+            continue;
+        }
+
+        const code = data.status_code;
+        const text = data.status || '';
+
+        if (code !== null && code !== undefined && code !== lastCode) {
+            lastCode = code;
+            if (!seen.has(code)) {
+                seen.add(code);
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                addStatusLog(`t=${elapsed}s → ${code} (${text})`);
+                console.log(`[RefPointing] t=${elapsed}s status=${code} (${text})`);
+            }
+        }
+
+        if (code !== null && code !== undefined) {
+            setRefStatus(`Статус: ${code} — ${text}`);
+        }
+
+        if (doneCodes.includes(code)) {
+            return { success: true, code, text, seen: Array.from(seen) };
+        }
+        if (failCodes.includes(code)) {
+            return { success: false, code, text, reason: `ошибка (статус ${code} — ${text})`, seen: Array.from(seen) };
+        }
+
+        await sleep(300);
     }
 
-    // 2. Проверка координат места
+    return { success: false, reason: 'таймаут', seen: Array.from(seen) };
+}
+
+// --- Основная функция референсного наведения ---
+async function performReferencePointing() {
+    skipWaitFlag = false;
+    clearStatusLog();
+
+    const refSelect = document.getElementById('refSatelliteSelect');
+    const refId = parseInt(refSelect.value);
+    if (!refId) { alert('Выберите референсный спутник'); return; }
+    const refSat = App.satellites.find(s => s.id === refId);
+    if (!refSat) { alert('Референсный спутник не найден'); return; }
+
     if (App.placeLon === null || App.placeLat === null) {
         alert('Координаты места не загружены. Проверьте параметры.');
         return;
     }
 
-    // 3. Получить параметры целевого спутника (вручную)
     const targetPos = parseFloat(document.getElementById('targetPosition').value);
     const targetPol = parseInt(document.getElementById('targetPolarization').value);
     if (isNaN(targetPos) || targetPos < -180 || targetPos > 180) {
         alert('Введите корректную позицию целевого спутника (-180..180)');
         return;
     }
-    if (targetPol !== 0 && targetPol !== 1) {
-        alert('Выберите поляризацию');
-        return;
-    }
+    if (targetPol !== 0 && targetPol !== 1) { alert('Выберите поляризацию'); return; }
 
-    // 4. Наведение на референсный спутник
+    // Логируем стартовый статус
+    try {
+        const r = await fetch('/api/telemetry');
+        const d = await r.json();
+        addStatusLog(`Стартовый статус: ${d.status_code} (${d.status || '--'})`);
+    } catch (e) { /* ignore */ }
+
+    // --- ШАГ 1: cmd,sat — записать параметры спутника ---
     const cmdRef = `cmd,sat,${refSat.name},${refSat.frequency.toFixed(2)},0,0,${refSat.position.toFixed(2)},${refSat.polarization},5.00,`;
+    addStatusLog(`1) Отправлено: cmd,sat (${refSat.name}, ${refSat.position}°)`);
+    setRefStatus('1/3: Запись параметров референсного...');
     sendCommand(cmdRef);
 
-    // 5. Ожидание успешного захвата (коды 51 или 83)
-    const ok = await waitForStatus([51, 83]);
-    if (!ok) {
-        alert('Не удалось навестись на референсный спутник (таймаут)');
+    // Небольшая пауза, чтобы антенна успела принять параметры
+    await sleep(1500);
+
+    // --- ШАГ 2: cmd,search — запустить наведение ---
+    addStatusLog('2) Отправлено: cmd,search');
+    setRefStatus('2/3: Запуск поиска на референсный...');
+    sendCommand('cmd,search,');
+
+    // --- ШАГ 3: ждём завершения наведения ---
+    setRefStatus('3/3: Ожидание наведения...');
+    const result = await waitForPointingComplete(180000);
+
+    if (!result.success && !result.skipped) {
+        const history = (result.seen || []).join(' → ');
+        alert(`Не удалось навестись на референсный спутник.\nПричина: ${result.reason}\n\nВиденные статусы:\n${history}`);
+        setRefStatus(`Ошибка: ${result.reason}`);
         return;
     }
 
-    // 6. Получить актуальные фактические углы
-    await sleep(500);
-    await fetchTelemetry(); // принудительно обновить телеметрию
+    if (result.skipped) {
+        addStatusLog('Ожидание пропущено пользователем — продолжаем с текущими углами');
+    } else {
+        addStatusLog(`✓ Наведение завершено (статус ${result.code} — ${result.text})`);
+    }
+
+    // Пауза и обновление телеметрии
+    await sleep(800);
+    await fetchTelemetry();
+
     const factAz = App.currentAz;
     const factEl = App.currentEl;
     const factPol = App.currentPol;
@@ -246,32 +334,37 @@ async function performReferencePointing() {
         return;
     }
 
-    // 7. Вычислить теоретические углы для референсного
-    const theorRef = calculateAngles(refSat.position, App.placeLon, App.placeLat);
+    addStatusLog(`Факт: AZ=${factAz.toFixed(2)} EL=${factEl.toFixed(2)} POL=${factPol.toFixed(2)}`);
 
-    // 8. Поправки = факт - теория
+    const theorRef = calculateAngles(refSat.position, App.placeLon, App.placeLat);
+    addStatusLog(`Теория (ref): AZ=${theorRef.az.toFixed(2)} EL=${theorRef.el.toFixed(2)} POL=${theorRef.pol.toFixed(2)}`);
+
     const deltaAz = factAz - theorRef.az;
     const deltaEl = factEl - theorRef.el;
     const deltaPol = factPol - theorRef.pol;
     App.refCorrections = { deltaAz, deltaEl, deltaPol };
     updateCorrectionsDisplay();
+    addStatusLog(`Поправки: ΔAZ=${deltaAz.toFixed(2)} ΔEL=${deltaEl.toFixed(2)} ΔPOL=${deltaPol.toFixed(2)}`);
 
-    // 9. Наведение на целевой с поправками
+    // --- ШАГ 4: наводимся на целевой с поправками через cmd,dir ---
     const theorTarget = calculateAngles(targetPos, App.placeLon, App.placeLat);
     const corrAz = theorTarget.az + deltaAz;
     const corrEl = theorTarget.el + deltaEl;
     const corrPol = theorTarget.pol + deltaPol;
 
+    addStatusLog(`4) Отправка cmd,dir: AZ=${corrAz.toFixed(2)} EL=${corrEl.toFixed(2)} POL=${corrPol.toFixed(2)}`);
     const cmdTarget = `cmd,dir,${corrAz.toFixed(2)},${corrEl.toFixed(2)},${corrPol.toFixed(2)},`;
     sendCommand(cmdTarget);
-    alert(`Наведение на целевой спутник отправлено:\nАЗ = ${corrAz.toFixed(2)}°\nЭЛ = ${corrEl.toFixed(2)}°\nПОЛ = ${corrPol.toFixed(2)}°`);
+
+    setRefStatus(`✓ Целевой: AZ=${corrAz.toFixed(2)}° EL=${corrEl.toFixed(2)}° POL=${corrPol.toFixed(2)}°`);
+    addStatusLog('✓ Команда на целевой отправлена');
 }
 
-// Обновить отображение поправок
 function updateCorrectionsDisplay() {
     const deltaAzSpan = document.getElementById('deltaAz');
     const deltaElSpan = document.getElementById('deltaEl');
     const deltaPolSpan = document.getElementById('deltaPol');
+    if (!deltaAzSpan || !deltaElSpan || !deltaPolSpan) return;
     if (App.refCorrections) {
         deltaAzSpan.textContent = App.refCorrections.deltaAz.toFixed(2) + '°';
         deltaElSpan.textContent = App.refCorrections.deltaEl.toFixed(2) + '°';
@@ -283,7 +376,6 @@ function updateCorrectionsDisplay() {
     }
 }
 
-// Сбросить поправки
 function resetCorrections() {
     App.refCorrections = null;
     updateCorrectionsDisplay();
