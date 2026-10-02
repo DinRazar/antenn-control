@@ -10,6 +10,41 @@ async function sendCommand(payload) {
     }
 }
 
+// --- Сброс сессии (развёртывание / складывание) ---
+// При этих операциях антенна меняет ориентацию, поправки теряют смысл.
+
+function resetSession() {
+    stopRequested = true;
+    pointingInProgress = false;
+    sendCommand('cmd,reset,');
+    clearSessionCorrections();
+}
+
+function stowSession() {
+    stopRequested = true;
+    pointingInProgress = false;
+    sendCommand('cmd,stow,');
+    clearSessionCorrections();
+}
+
+function clearSessionCorrections() {
+    App.refCorrections = null;
+    App.referenceSatellite = null;
+    App.committedSatellite = null;
+    if (typeof updateCorrectionsDisplay === 'function') updateCorrectionsDisplay();
+    if (typeof updateRefModeButton === 'function') updateRefModeButton();
+
+    const block = document.getElementById('autoStatusBlock');
+    if (block) block.style.display = 'none';
+
+    if (App.mode === 'reference') {
+        const autoBtn = document.querySelector('#modeToggle .btn[data-mode="auto"]');
+        if (autoBtn) autoBtn.click();
+    }
+}
+
+// --- Ручное управление ---
+
 function manualSpeed() {
     const speed = prompt("Скорость (0.00..6.00)", "3.00");
     if (speed) sendCommand('cmd,manual,1,' + speed + ',');

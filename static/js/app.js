@@ -1,63 +1,57 @@
 // Глобальный объект приложения
 const App = {
-    // Канвасы и контексты
     azimuthCanvas: null,
     elevationCanvas: null,
     azCtx: null,
     elCtx: null,
 
-    // Текущие значения
     currentAz: 0,
     currentEl: 0,
     prevEl: 0,
-    currentPol: 0,          // <-- НОВОЕ поле для поляризации
+    currentPol: 0,
     targetAz: 0,
     targetEl: 0,
     searchAz: 0,
     searchEl: 0,
     showSearchRange: false,
 
-    // Спутники
     satellites: [],
-    selectedSatellite: null,
+    selectedSatellite: null,     // выбранный в выпадающем списке
+    committedSatellite: null,    // тот, для которого ушёл cmd,sat
 
-    // Порог
     lockThreshold: null,
 
-    // Режим
-    mode: 'auto', // 'auto' | 'manual' | 'reference'
+    mode: 'auto',
 
-    // Референсные поправки
-    refCorrections: null, // { deltaAz, deltaEl, deltaPol } или null
+    // Референсные поправки (сессионные)
+    refCorrections: null,     // { deltaAz, deltaEl, deltaPol }
+    referenceSatellite: null, // спутник, по которому считали поправки
 
-    // Координаты места (загружаются из place_params)
     placeLon: null,
     placeLat: null,
 
-    // Инициализация
     init: function() {
         this.azimuthCanvas = document.getElementById('azimuthCanvas');
         this.elevationCanvas = document.getElementById('elevationCanvas');
         this.azCtx = this.azimuthCanvas.getContext('2d');
         this.elCtx = this.elevationCanvas.getContext('2d');
 
-        // Инициализация навигации
         this.initNavigation();
-
-        // Инициализация переключателя режимов
         this.initModeToggle();
 
-        // Начальная отрисовка
         drawAzimuth(0);
         drawElevation(0);
 
-        // Загрузка данных
         loadSatellites();
         loadAntennaParams();
         loadLockThreshold();
         loadPlaceParams();
 
-        // Запуск цикла телеметрии
+        // Обновить состояние кнопки референсного режима
+        if (typeof updateRefModeButton === 'function') {
+            updateRefModeButton();
+        }
+
         setInterval(fetchTelemetry, 333);
         fetchTelemetry();
     },
@@ -90,27 +84,34 @@ const App = {
         buttons.forEach(btn => {
             btn.addEventListener('click', function() {
                 const mode = this.dataset.mode;
+
+                // Проверка доступа к референсному режиму
+                if (mode === 'reference' && !App.refCorrections) {
+                    alert('Референсный режим недоступен.\n\nСначала выполните автоматическое наведение на спутник — система вычислит поправки, и режим станет доступен.');
+                    return;
+                }
+
                 buttons.forEach(b => b.classList.remove('active'));
                 this.classList.add('active');
                 App.mode = mode;
-                // Прячем все панели
+
                 autoMode.classList.add('hidden');
                 manualMode.classList.add('hidden');
                 referenceMode.classList.add('hidden');
-                // Показываем нужную
+
                 if (mode === 'auto') {
                     autoMode.classList.remove('hidden');
                 } else if (mode === 'manual') {
                     manualMode.classList.remove('hidden');
                 } else if (mode === 'reference') {
                     referenceMode.classList.remove('hidden');
-                    // Обновляем списки в референсном режиме
-                    updateRefSatelliteSelects();
+                    if (typeof updateCorrectionsDisplay === 'function') {
+                        updateCorrectionsDisplay();
+                    }
                 }
             });
         });
     }
 };
 
-// При загрузке DOM инициализируем приложение
 document.addEventListener('DOMContentLoaded', () => App.init());

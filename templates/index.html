@@ -53,10 +53,9 @@
         </div>
     </div>
 
-    <!-- Страница Управление (две колонки) -->
+    <!-- Страница Управление -->
     <div id="page-index">
         <div class="dashboard">
-            <!-- Левая колонка: все панели управления -->
             <div class="dashboard-left">
                 <!-- Режим управления -->
                 <div class="panel">
@@ -65,7 +64,7 @@
                         <div class="mode-toggle" id="modeToggle">
                             <button class="btn active" data-mode="auto">Автоматический</button>
                             <button class="btn" data-mode="manual">Ручной</button>
-                            <button class="btn" data-mode="reference">Референсный</button>
+                            <button class="btn" id="refModeBtn" data-mode="reference" style="opacity:0.45; cursor:not-allowed;" title="Сначала выполните автонаведение">Референсный 🔒</button>
                         </div>
                     </div>
                 </div>
@@ -98,11 +97,17 @@
                         <button onclick="showAddSatellite()" class="btn btn-outline">+ Добавить</button>
                     </div>
 
+                    <!-- Статус автонаведения -->
+                    <div id="autoStatusBlock" style="margin-top:12px; display:none; padding:10px 12px; border-radius:6px; background:#fff8e1;">
+                        <div style="font-size:13px; font-weight:500; margin-bottom:4px;">Статус автонаведения:</div>
+                        <div id="autoStatusDisplay" style="font-size:14px; color:#333;">—</div>
+                    </div>
+
                     <div class="control-group mt-12">
-                        <button onclick="sendCommand('cmd,stop,')" class="btn btn-outline">Стоп</button>
-                        <button onclick="sendCommand('cmd,reset,')" class="btn btn-outline">Развернуть</button>
-                        <button onclick="sendCommand('cmd,search,')" class="btn btn-outline">Поиск</button>
-                        <button onclick="sendCommand('cmd,stow,')" class="btn btn-outline">Сложить</button>
+                        <button onclick="stopSearch()" class="btn btn-outline">Стоп</button>
+                        <button onclick="resetSession()" class="btn btn-outline">Развернуть</button>
+                        <button onclick="startSearch()" class="btn btn-outline">Поиск</button>
+                        <button onclick="stowSession()" class="btn btn-outline">Сложить</button>
                     </div>
                 </div>
 
@@ -120,69 +125,32 @@
                     </div>
 
                     <div class="control-group mt-12">
-                        <button onclick="sendCommand('cmd,stop,')" class="btn btn-outline">Стоп</button>
-                        <button onclick="sendCommand('cmd,reset,')" class="btn btn-outline">Развернуть</button>
+                        <button onclick="stopSearch()" class="btn btn-outline">Стоп</button>
+                        <button onclick="resetSession()" class="btn btn-outline">Развернуть</button>
                         <button onclick="setPosition()" class="btn btn-outline">Установить</button>
-                        <button onclick="sendCommand('cmd,stow,')" class="btn btn-outline">Сложить</button>
+                        <button onclick="stowSession()" class="btn btn-outline">Сложить</button>
                     </div>
                 </div>
 
-                <!-- РЕФЕРЕНСНЫЙ РЕЖИМ (НОВЫЙ) -->
+                <!-- РЕФЕРЕНСНЫЙ РЕЖИМ -->
                 <div class="panel hidden" id="referenceMode">
                     <div class="panel-title">Референсный режим</div>
-                    <!-- ПАНЕЛЬ СТАТУСА НАВЕДЕНИЯ (добавить) -->
-                    <div style="background:#fff8e1; padding:10px 12px; border-radius:6px; margin-bottom:12px;">
-                        <div style="font-size:13px; font-weight:500; margin-bottom:4px;">
-                            Текущий статус наведения:
+                    
+                    <!-- Информация о поправках -->
+                    <div id="refInfoBlock" style="background:#e8f5e9; padding:12px; border-radius:6px; margin-bottom:16px; border-left:4px solid #4caf50;">
+                        <div style="font-size:13px; color:#2e7d32; margin-bottom:6px;">✓ Поправки получены от:</div>
+                        <div id="refSourceInfo" style="font-size:14px; font-weight:500; margin-bottom:8px;">—</div>
+                        <div style="display:flex; gap:20px; flex-wrap:wrap; font-size:14px;">
+                            <span><strong>ΔАЗ:</strong> <span id="deltaAz">—</span></span>
+                            <span><strong>ΔЭЛ:</strong> <span id="deltaEl">—</span></span>
+                            <span><strong>ΔПОЛ:</strong> <span id="deltaPol">—</span></span>
                         </div>
-                        <div id="refStatusDisplay" style="font-size:14px; color:#333; margin-bottom:6px;">—</div>
-                        <div id="refStatusLog" style="font-size:11px; font-family: monospace; color:#555; max-height:130px; overflow-y:auto; background:#fff; padding:6px; border-radius:4px; border:1px solid #eee;">
-                            Ожидание запуска...
-                        </div>
-                        <button id="skipWaitBtn" onclick="skipReferenceWait()" class="btn btn-outline" style="margin-top:6px; display:none; font-size:12px; padding:3px 10px;">
-                            Пропустить ожидание и вычислить поправки
-                        </button>
-                    </div>
-                                        
-                    <!-- Референсный спутник -->
-                    <div style="margin-bottom:16px;">
-                        <div class="satellite-select" style="margin-bottom:8px;">
-                            <label>Референсный спутник (для вычисления поправки)</label>
-                            <select id="refSatelliteSelect" onchange="selectRefSatellite()">
-                                <option value="">-- Выберите --</option>
-                            </select>
-                        </div>
-                        <div class="satellite-info" style="margin-bottom:8px;">
-                            <div class="info-item">
-                                <span class="info-label">Позиция</span>
-                                <span class="info-value" id="refSatPos">--</span>
-                            </div>
-                            <div class="info-item">
-                                <span class="info-label">Частота</span>
-                                <span class="info-value" id="refSatFreq">--</span>
-                            </div>
-                            <div class="info-item">
-                                <span class="info-label">Поляризация</span>
-                                <span class="info-value" id="refSatPol">--</span>
-                            </div>
-                        </div>
-                        <!-- Кнопка "Запомнить поправку" больше не нужна, она будет вызываться автоматически -->
+                        <button onclick="resetCorrections()" class="btn btn-outline" style="margin-top:8px; font-size:12px; padding:3px 10px;">Сбросить поправки</button>
                     </div>
 
-                    <!-- Отображение поправок -->
-                    <div style="background:#f8f8f8; padding:12px; border-radius:6px; margin-bottom:16px;">
-                        <div style="font-size:14px; font-weight:500; margin-bottom:6px;">Текущие поправки</div>
-                        <div style="display:flex; gap:20px; flex-wrap:wrap;">
-                            <span><strong>ΔАЗ:</strong> <span id="deltaAz">не задана</span></span>
-                            <span><strong>ΔЭЛ:</strong> <span id="deltaEl">не задана</span></span>
-                            <span><strong>ΔПОЛ:</strong> <span id="deltaPol">не задана</span></span>
-                        </div>
-                        <button onclick="resetCorrections()" class="btn btn-outline" style="margin-top:8px;">Сбросить поправки</button>
-                    </div>
-
-                    <!-- Целевой спутник (вручную) -->
+                    <!-- Целевой спутник -->
                     <div>
-                        <label style="font-weight:500;">Целевой спутник (вручную)</label>
+                        <label style="font-weight:500;">Целевой спутник</label>
                         <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; margin-bottom:8px;">
                             <div>
                                 <label>Позиция (градусы)</label>
@@ -196,15 +164,14 @@
                                 </select>
                             </div>
                         </div>
-                        <button onclick="performReferencePointing()" class="btn btn-primary">Навестись (референсный → целевой)</button>
+                        <button onclick="pointWithCorrection()" class="btn btn-primary">Навестись с поправкой</button>
                     </div>
                 </div>
-                <!-- конец референсного режима -->
 
             </div>
             <!-- Конец левой колонки -->
 
-            <!-- Правая колонка: визуализация -->
+            <!-- Правая колонка -->
             <div class="dashboard-right">
                 <div class="panel">
                     <div class="panel-title">Положение антенны</div>
@@ -225,7 +192,7 @@
         </div>
     </div>
 
-    <!-- Страница Параметры (без изменений) -->
+    <!-- Страница Параметры -->
     <div id="page-params" class="hidden">
         <div class="panel">
             <div class="panel-title">Параметры антенны</div>
