@@ -15,6 +15,7 @@ async function fetchTelemetry() {
         App.currentPol = curPol;   // сохраняем в глобальном объекте
         App.targetAz = tarAz;
         App.targetEl = tarEl;
+        App.targetPol = tarPol;
         
         // Определяем режим отображения диапазона поиска и целевых указателей
         // Показываем ТОЛЬКО во время активного автоматического наведения (коды 49, 50, 52)
@@ -64,7 +65,17 @@ async function fetchTelemetry() {
             document.getElementById('status_code').innerText = 'Код: ' + data.status_code;
         }
         
-        document.getElementById('gps').innerText = data.gps || '--';
+        // GPS: 1 = есть сигнал, 0 = нет сигнала
+        const gpsRaw = data.gps;
+        let gpsText;
+        if (gpsRaw === '1' || gpsRaw === 1) {
+            gpsText = 'Есть';
+        } else if (gpsRaw === '0' || gpsRaw === 0) {
+            gpsText = 'Нет';
+        } else {
+            gpsText = '--';
+        }
+        document.getElementById('gps').innerText = gpsText;
         document.getElementById('lon').innerText = data.lon || '--';
         document.getElementById('lat').innerText = data.lat || '--';
         
