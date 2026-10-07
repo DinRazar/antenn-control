@@ -24,8 +24,10 @@ const App = {
     mode: 'auto',
 
     // Референсные поправки (сессионные)
-    refCorrections: null,     // { deltaAz, deltaEl, deltaPol }
-    referenceSatellite: null, // спутник, по которому считали поправки
+    refCorrections: null,
+    referenceSatellite: null,
+    refTheor: null,    // T_ref — теория референсного (по формуле)
+    refActual: null,   // A_ref — факт, куда антенна встала на референсе
 
     placeLon: null,
     placeLat: null,

@@ -140,14 +140,13 @@ class AntennaSession:
                 except Exception as e:
                     print(f"Error parsing lock threshold: {e}")
             elif line.startswith('$cmd,place,'):
-                # Формат: $cmd,place,lon,lat,heading,*xx
                 try:
                     items = line.split(',')
                     if len(items) >= 5:
                         lon = float(items[2])
                         lat = float(items[3])
                         self.place_params = [lon, lat]
-                        print(f"Place params updated: lon={lon}, lat={lat}")
+                    print(f"Place params updated: lon={lon}, lat={lat}")
                 except Exception as e:
                     print(f"Error parsing place params: {e}")
             elif line.startswith('$cmd,set lock ok') or line.startswith('$cmd,set lock ack'):

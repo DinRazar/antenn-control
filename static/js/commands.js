@@ -30,6 +30,8 @@ function stowSession() {
 function clearSessionCorrections() {
     App.refCorrections = null;
     App.referenceSatellite = null;
+    App.refTheor = null;
+    App.refActual = null;
     App.committedSatellite = null;
     if (typeof updateCorrectionsDisplay === 'function') updateCorrectionsDisplay();
     if (typeof updateRefModeButton === 'function') updateRefModeButton();
