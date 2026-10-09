@@ -102,25 +102,40 @@ async function saveSatellite() {
 
 // --- Утилиты ---
 
-function calculateAngles(satLongitude, placeLon, placeLat) {
+// satLongitude — долгота спутника; placeLon, placeLat — место; polarization — 0=H, 1=V
+function calculateAngles(satLongitude, placeLon, placeLat, polarization) {
     const delta = (satLongitude - placeLon) * Math.PI / 180;
     const latRad = placeLat * Math.PI / 180;
     const cosDelta = Math.cos(delta);
     const cosLat = Math.cos(latRad);
     const sinLat = Math.sin(latRad);
 
+    // Угол места
     const numerator = cosDelta * cosLat - 0.151;
     const denominator = Math.sqrt(1 - cosDelta * cosDelta * cosLat * cosLat);
     let elRad = Math.atan2(numerator, denominator);
     let elDeg = elRad * 180 / Math.PI;
 
+    // Азимут
     let azRad = Math.PI - Math.atan2(Math.tan(delta), sinLat);
     let azDeg = azRad * 180 / Math.PI;
     if (azDeg < 0) azDeg += 360;
     if (azDeg >= 360) azDeg -= 360;
 
-    let polRad = Math.atan2(Math.sin(delta), Math.tan(latRad));
-    let polDeg = polRad * 180 / Math.PI;
+    // Поляризация: skew "от горизонтали"
+    const skew = Math.atan2(Math.sin(delta), Math.tan(latRad)) * 180 / Math.PI;
+
+    // Переводим в систему антенны ("от вертикали") и учитываем V/H
+    let polDeg;
+    if (polarization === 1) {
+        polDeg = 90 - skew;       // вертикальная
+    } else {
+        polDeg = -skew;           // горизонтальная
+    }
+
+    // Нормализация в диапазон [-95, 95] (требование протокола)
+    while (polDeg > 95) polDeg -= 180;
+    while (polDeg < -95) polDeg += 180;
 
     return { az: azDeg, el: elDeg, pol: polDeg };
 }
@@ -274,7 +289,7 @@ async function startSearch() {
     }
 
     // T_ref — теория референса по формуле
-    const T_ref = calculateAngles(sat.position, App.placeLon, App.placeLat);
+    const T_ref = calculateAngles(sat.position, App.placeLon, App.placeLat, sat.polarization);
     // A_ref — факт, куда встала антенна
     const A_ref = { az: factAz, el: factEl, pol: factPol };
 
@@ -331,7 +346,7 @@ async function pointWithCorrection() {
 
     const T_ref    = App.refTheor;
     const A_ref    = App.refActual;
-    const T_target = calculateAngles(targetPos, App.placeLon, App.placeLat);
+    const T_target = calculateAngles(targetPos, App.placeLon, App.placeLat, targetPol);
 
     // ТВОЯ поправка = T_ref − T_target
     const corr = {
