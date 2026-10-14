@@ -133,9 +133,9 @@ function calculateAngles(satLongitude, placeLon, placeLat, polarization) {
         polDeg = -skew;           // горизонтальная
     }
 
-    // Нормализация в диапазон [-95, 95] (требование протокола)
-    while (polDeg > 95) polDeg -= 180;
-    while (polDeg < -95) polDeg += 180;
+    // Нормализация в диапазон [-90, 90] (реальный диапазон антенны)
+    while (polDeg > 90) polDeg -= 180;
+    while (polDeg < -90) polDeg += 180;
 
     return { az: azDeg, el: elDeg, pol: polDeg };
 }
