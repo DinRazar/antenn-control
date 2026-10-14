@@ -552,3 +552,130 @@ canvas {
         min-width: 0;
     }
 }
+
+
+/* ===== РУЧНОЕ УПРАВЛЕНИЕ ===== */
+
+.manual-top-toggle {
+    display: inline-flex;
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+.manual-top-toggle .btn {
+    border: none;
+    border-radius: 0;
+    padding: 8px 20px;
+}
+.manual-top-toggle .btn.active {
+    background: #1a1a1a;
+    color: #fff;
+}
+
+.manual-mode-toggle {
+    display: inline-flex;
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+.manual-mode-toggle .btn {
+    border: none;
+    border-radius: 0;
+    padding: 8px 20px;
+}
+.manual-mode-toggle .btn.active {
+    background: #1a1a1a;
+    color: #fff;
+}
+
+.manual-settings {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+.manual-settings .input-group input {
+    width: 90px;
+}
+
+/* Джойстик */
+.joystick {
+    display: grid;
+    grid-template-columns: 62px 62px 62px;
+    grid-template-rows: 62px 62px 62px;
+    gap: 8px;
+    justify-content: center;
+    margin: 16px auto;
+}
+
+.joy-btn {
+    width: 62px;
+    height: 62px;
+    border: 1px solid #d0d0d0;
+    background: #fafafa;
+    border-radius: 10px;
+    font-size: 18px;
+    color: #333;
+    cursor: pointer;
+    transition: all 0.12s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+}
+.joy-btn:hover {
+    background: #f0f0f0;
+    border-color: #b0b0b0;
+}
+.joy-btn:active {
+    transform: scale(0.95);
+}
+.joy-btn.active {
+    background: #1a1a1a;
+    color: #fff;
+    border-color: #1a1a1a;
+}
+.joy-center {
+    font-size: 14px;
+    color: #c62828;
+    border-color: #f0b8b8;
+}
+.joy-center:hover {
+    background: #ffebee;
+    border-color: #e57373;
+}
+
+.pol-control {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 12px;
+}
+.pol-control label {
+    font-size: 13px;
+    color: #666;
+}
+.pol-btn {
+    width: 62px;
+    height: 42px;
+    font-size: 16px;
+}
+
+@media (max-width: 600px) {
+    .joystick {
+        grid-template-columns: 54px 54px 54px;
+        grid-template-rows: 54px 54px 54px;
+    }
+    .joy-btn {
+        width: 54px;
+        height: 54px;
+        font-size: 16px;
+    }
+    .pol-btn {
+        width: 54px;
+        height: 38px;
+    }
+}

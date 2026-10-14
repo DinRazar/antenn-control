@@ -114,20 +114,76 @@
                 <!-- Ручное управление -->
                 <div class="panel hidden" id="manualMode">
                     <div class="panel-title">Ручное управление</div>
-                    
-                    <div class="input-group">
-                        <label>Аз:</label>
-                        <input type="number" step="0.01" id="az" placeholder="0.00">
-                        <label>Мес:</label>
-                        <input type="number" step="0.01" id="el" placeholder="0.00">
-                        <label>Пол:</label>
-                        <input type="number" step="0.01" id="pol" placeholder="0.00">
+
+                    <!-- Переключатель: ручной ввод / джойстик -->
+                    <div class="manual-top-toggle">
+                        <button class="btn active" data-manual-tab="direct">Ручной ввод</button>
+                        <button class="btn" data-manual-tab="joystick">Джойстик</button>
                     </div>
 
+                    <!-- ===== Ручной ввод (старый режим) ===== -->
+                    <div id="manualTab-direct">
+                        <div class="input-group">
+                            <label>Аз:</label>
+                            <input type="number" step="0.01" id="az" placeholder="0.00">
+                            <label>Мес:</label>
+                            <input type="number" step="0.01" id="el" placeholder="0.00">
+                            <label>Пол:</label>
+                            <input type="number" step="0.01" id="pol" placeholder="0.00">
+                        </div>
+                        <div class="control-group mt-12">
+                            <button onclick="setPosition()" class="btn btn-primary">Установить</button>
+                        </div>
+                    </div>
+
+                    <!-- ===== Джойстик ===== -->
+                    <div id="manualTab-joystick" class="hidden">
+
+                        <!-- Подрежим: пошаговый / непрерывный -->
+                        <div class="manual-mode-toggle">
+                            <button class="btn active" data-manual-mode="step">Пошаговый</button>
+                            <button class="btn" data-manual-mode="continuous">Непрерывный</button>
+                        </div>
+
+                        <!-- Настройки -->
+                        <div class="manual-settings">
+                            <div class="input-group" id="stepGroup">
+                                <label>Шаг (°):</label>
+                                <input type="number" step="0.1" id="manualStepInput" value="1.0" min="0.1">
+                            </div>
+                            <div class="input-group" id="speedGroup" style="display:none;">
+                                <label>Скорость (°/с):</label>
+                                <input type="number" step="0.1" id="manualSpeedInput" value="3.0" min="0.1" max="6.0">
+                            </div>
+                        </div>
+
+                        <!-- Джойстик AZ/EL -->
+                        <div class="joystick">
+                            <div></div>
+                            <button class="joy-btn" id="joy-el-up" onclick="manualAction('el-up')">▲</button>
+                            <div></div>
+
+                            <button class="joy-btn" id="joy-az-left" onclick="manualAction('az-left')">◀</button>
+                            <button class="joy-btn joy-center" id="joy-stop" onclick="manualStop()" title="Стоп">■</button>
+                            <button class="joy-btn" id="joy-az-right" onclick="manualAction('az-right')">▶</button>
+
+                            <div></div>
+                            <button class="joy-btn" id="joy-el-down" onclick="manualAction('el-down')">▼</button>
+                            <div></div>
+                        </div>
+
+                        <!-- Поляризация -->
+                        <div class="pol-control">
+                            <label>Поляризация:</label>
+                            <button class="joy-btn pol-btn" id="joy-pol-left" onclick="manualAction('pol-left')">◀</button>
+                            <button class="joy-btn pol-btn" id="joy-pol-right" onclick="manualAction('pol-right')">▶</button>
+                        </div>
+                    </div>
+
+                    <!-- Общие действия для обоих режимов -->
                     <div class="control-group mt-12">
-                        <button onclick="stopSearch()" class="btn btn-outline">Стоп</button>
+                        <button onclick="manualStop()" class="btn btn-outline">Стоп</button>
                         <button onclick="resetSession()" class="btn btn-outline">Развернуть</button>
-                        <button onclick="setPosition()" class="btn btn-outline">Установить</button>
                         <button onclick="stowSession()" class="btn btn-outline">Сложить</button>
                     </div>
                 </div>
