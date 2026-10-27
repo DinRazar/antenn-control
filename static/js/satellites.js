@@ -102,6 +102,39 @@ async function saveSatellite() {
 
 // --- Утилиты ---
 
+
+// --- Нормализация углов к физическим диапазонам антенны ---
+
+function normalizeAzimuth(az) {
+    return ((az % 360) + 360) % 360;
+}
+
+function normalizeElevation(el) {
+    return Math.max(0, Math.min(90, el));
+}
+
+// Поляризация — угловая величина с периодом 180°:
+// 95° ≡ -85°, -100° ≡ 80°. Нормализуем к [-90, 90].
+function normalizePolarization(pol) {
+    while (pol > 90)  pol -= 180;
+    while (pol < -90) pol += 180;
+    return pol;
+}
+
+// Возвращает нормализованные значения + флаги "было ли приведение"
+function normalizeTargetAngles(az, el, pol) {
+    const nAz  = normalizeAzimuth(az);
+    const nEl  = normalizeElevation(el);
+    const nPol = normalizePolarization(pol);
+    return {
+        az: nAz, el: nEl, pol: nPol,
+        azWrapped:  Math.abs(nAz - az) > 1e-6,
+        elClamped:  Math.abs(nEl - el) > 1e-6,
+        polWrapped: Math.abs(nPol - pol) > 1e-6,
+        azRaw: az, elRaw: el, polRaw: pol
+    };
+}
+
 // satLongitude — долгота спутника; placeLon, placeLat — место; polarization — 0=H, 1=V
 function calculateAngles(satLongitude, placeLon, placeLat, polarization) {
     const delta = (satLongitude - placeLon) * Math.PI / 180;
@@ -322,6 +355,151 @@ async function stopSearch() {
 }
 
 // --- Наведение с поправкой (референсный режим) ---
+// --- Хелперы для ожидания по осям ---
+function angularDiffDeg(a, b) {
+    let d = Math.abs(a - b) % 360;
+    if (d > 180) d = 360 - d;
+    return d;
+}
+
+async function waitForAzimuthReached(targetAz, tolerance = 1.5, timeoutMs = 180000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        if (stopRequested) return false;
+        try {
+            const resp = await fetch('/api/telemetry');
+            const data = await resp.json();
+            const cur = parseFloat(data.cur_az);
+            if (!isNaN(cur) && angularDiffDeg(cur, targetAz) <= tolerance) return true;
+        } catch (e) {}
+        await sleep(300);
+    }
+    return false;
+}
+
+async function waitForElevationReached(targetEl, tolerance = 1.5, timeoutMs = 180000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        if (stopRequested) return false;
+        try {
+            const resp = await fetch('/api/telemetry');
+            const data = await resp.json();
+            const cur = parseFloat(data.cur_el);
+            if (!isNaN(cur) && Math.abs(cur - targetEl) <= tolerance) return true;
+        } catch (e) {}
+        await sleep(300);
+    }
+    return false;
+}
+
+// --- Наведение с поправкой: ДВА ЭТАПА ---
+// --- Хелперы ожидания ---
+function angularDiffDeg(a, b) {
+    let d = Math.abs(a - b) % 360;
+    if (d > 180) d = 360 - d;
+    return d;
+}
+
+async function waitForAzimuthReached(targetAz, tolerance = 1.5, timeoutMs = 180000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        if (stopRequested) return false;
+        try {
+            const resp = await fetch('/api/telemetry');
+            const data = await resp.json();
+            const cur = parseFloat(data.cur_az);
+            if (!isNaN(cur) && angularDiffDeg(cur, targetAz) <= tolerance) return true;
+        } catch (e) {}
+        await sleep(300);
+    }
+    return false;
+}
+
+async function waitForElevationReached(targetEl, tolerance = 1.5, timeoutMs = 180000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        if (stopRequested) return false;
+        try {
+            const resp = await fetch('/api/telemetry');
+            const data = await resp.json();
+            const cur = parseFloat(data.cur_el);
+            if (!isNaN(cur) && Math.abs(cur - targetEl) <= tolerance) return true;
+        } catch (e) {}
+        await sleep(300);
+    }
+    return false;
+}
+
+// --- Главная функция: расчёт → подтверждение → 2 этапа ---
+// ===== Хелперы для референсного наведения =====
+
+function angularDiffDeg(a, b) {
+    let d = Math.abs(a - b) % 360;
+    if (d > 180) d = 360 - d;
+    return d;
+}
+
+async function waitForAzimuthReached(targetAz, tolerance = 1.5, timeoutMs = 180000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        if (stopRequested) return false;
+        try {
+            const resp = await fetch('/api/telemetry');
+            const data = await resp.json();
+            const cur = parseFloat(data.cur_az);
+            if (!isNaN(cur) && angularDiffDeg(cur, targetAz) <= tolerance) return true;
+        } catch (e) {}
+        await sleep(300);
+    }
+    return false;
+}
+
+async function waitForElevationReached(targetEl, tolerance = 1.5, timeoutMs = 180000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        if (stopRequested) return false;
+        try {
+            const resp = await fetch('/api/telemetry');
+            const data = await resp.json();
+            const cur = parseFloat(data.cur_el);
+            if (!isNaN(cur) && Math.abs(cur - targetEl) <= tolerance) return true;
+        } catch (e) {}
+        await sleep(300);
+    }
+    return false;
+}
+
+// Нормализация углов к физическим диапазонам антенны
+function normalizeAzimuth(az) {
+    return ((az % 360) + 360) % 360;
+}
+
+function normalizeElevation(el) {
+    return Math.max(0, Math.min(90, el));
+}
+
+// Поляризация — угловая величина с периодом 180°: 95° ≡ -85°, -100° ≡ 80°.
+// Нормализуем к [-90, 90].
+function normalizePolarization(pol) {
+    while (pol > 90)  pol -= 180;
+    while (pol < -90) pol += 180;
+    return pol;
+}
+
+function normalizeTargetAngles(az, el, pol) {
+    const nAz  = normalizeAzimuth(az);
+    const nEl  = normalizeElevation(el);
+    const nPol = normalizePolarization(pol);
+    return {
+        az: nAz, el: nEl, pol: nPol,
+        azWrapped:  Math.abs(nAz - az) > 1e-6,
+        elClamped:  Math.abs(nEl - el) > 1e-6,
+        polWrapped: Math.abs(nPol - pol) > 1e-6
+    };
+}
+
+// ===== Главная функция: расчёт → подтверждение → 2 этапа =====
+
 async function pointWithCorrection() {
     if (!App.refTheor || !App.refActual || !App.referenceSatellite) {
         alert('Поправки не заданы. Сначала выполните автонаведение.');
@@ -329,6 +507,10 @@ async function pointWithCorrection() {
     }
     if (App.placeLon === null || App.placeLat === null) {
         alert('Координаты места не загружены.');
+        return;
+    }
+    if (pointingInProgress) {
+        alert('Наведение уже выполняется. Дождитесь завершения или нажмите "Стоп".');
         return;
     }
 
@@ -344,45 +526,139 @@ async function pointWithCorrection() {
         return;
     }
 
+    // ---- Расчёт теории/факта и поправок ----
     const T_ref    = App.refTheor;
     const A_ref    = App.refActual;
     const T_target = calculateAngles(targetPos, App.placeLon, App.placeLat, targetPol);
 
-    // ТВОЯ поправка = T_ref − T_target
     const corr = {
         az:  T_ref.az  - T_target.az,
         el:  T_ref.el  - T_target.el,
         pol: T_ref.pol - T_target.pol
     };
 
-    // Итог = A_ref − поправка
-    const corrAz  = A_ref.az  - corr.az;
-    const corrEl  = A_ref.el  - corr.el;
-    const corrPol = A_ref.pol - corr.pol;
+    // ---- Сырые значения до нормализации ----
+    const rawAz  = A_ref.az  - corr.az;
+    const rawEl  = A_ref.el  - corr.el;
+    const rawPol = A_ref.pol - corr.pol;
 
-    // Отправляем cmd,sat для целевого (чтобы антенна знала H/V)
-    const freq = App.referenceSatellite.frequency || 11701.50;
-    setAutoStatus('Отправка параметров целевого спутника...');
-    sendCommand(`cmd,sat,Target,${freq.toFixed(2)},0,0,${targetPos.toFixed(2)},${targetPol},5.00,`);
+    // ---- Приводим к допустимым диапазонам антенны ----
+    const norm    = normalizeTargetAngles(rawAz, rawEl, rawPol);
+    const corrAz  = norm.az;
+    const corrEl  = norm.el;
+    const corrPol = norm.pol;
 
-    await sleep(1500);
+    // ---- Собираем предупреждения о приведении ----
+    const warnings = [];
+    if (norm.azWrapped)
+        warnings.push(`AZ: ${rawAz.toFixed(2)}° → ${corrAz.toFixed(2)}° (норм. по 360°)`);
+    if (norm.elClamped)
+        warnings.push(`EL: ${rawEl.toFixed(2)}° → ${corrEl.toFixed(2)}° (ограничено 0..90°)`);
+    if (norm.polWrapped)
+        warnings.push(`POL: ${rawPol.toFixed(2)}° → ${corrPol.toFixed(2)}° (норм. по 180°)`);
 
-    setAutoStatus('Наведение на целевой...');
-    sendCommand(`cmd,dir,${corrAz.toFixed(2)},${corrEl.toFixed(2)},${corrPol.toFixed(2)},`);
+    const warnBlock = warnings.length
+        ? `\n\n⚠ Приведено к диапазонам антенны:\n  ` + warnings.join('\n  ')
+        : '';
 
-    alert(
-        `Референс ${App.referenceSatellite.position}°E:\n` +
-        `  теория:  AZ=${T_ref.az.toFixed(2)}°  EL=${T_ref.el.toFixed(2)}°  POL=${T_ref.pol.toFixed(2)}°\n` +
-        `  факт:    AZ=${A_ref.az.toFixed(2)}°  EL=${A_ref.el.toFixed(2)}°  POL=${A_ref.pol.toFixed(2)}°\n\n` +
-        `Целевой ${targetPos}°E (теория):\n` +
+    // ---- ШАГ 1: показать расчёт и спросить разрешение ----
+    const refPos = App.referenceSatellite.position;
+    const info =
+        `Референс ${refPos}°E:\n` +
+        `  теория: AZ=${T_ref.az.toFixed(2)}°  EL=${T_ref.el.toFixed(2)}°  POL=${T_ref.pol.toFixed(2)}°\n` +
+        `  факт:   AZ=${A_ref.az.toFixed(2)}°  EL=${A_ref.el.toFixed(2)}°  POL=${A_ref.pol.toFixed(2)}°\n\n` +
+        `Целевой ${targetPos}° (теория):\n` +
         `  AZ=${T_target.az.toFixed(2)}°  EL=${T_target.el.toFixed(2)}°  POL=${T_target.pol.toFixed(2)}°\n\n` +
         `Поправка (T_ref − T_target):\n` +
         `  ΔAZ=${corr.az.toFixed(2)}°  ΔEL=${corr.el.toFixed(2)}°  ΔPOL=${corr.pol.toFixed(2)}°\n\n` +
-        `ОТПРАВЛЕНО (A_ref − поправка):\n` +
+        `Будет отправлено (A_ref − поправка):\n` +
         `  AZ  = ${corrAz.toFixed(2)}°\n` +
         `  EL  = ${corrEl.toFixed(2)}°\n` +
-        `  POL = ${corrPol.toFixed(2)}°`
-    );
+        `  POL = ${corrPol.toFixed(2)}°` +
+        warnBlock;
+
+    if (!confirm(info + '\n\n──────────────\nНачать наведение?')) {
+        return;
+    }
+
+    pointingInProgress = true;
+    stopRequested = false;
+
+    try {
+        // Свежая телеметрия — нужен текущий угол места/поляризация
+        await fetchTelemetry();
+        const safeEl  = App.currentEl;
+        const safePol = App.currentPol;
+
+        // Параметры целевого в антенну (нужно для H/V)
+        const freq = App.referenceSatellite.frequency || 11701.50;
+        setAutoStatus('Отправка параметров целевого спутника...');
+        sendCommand(`cmd,sat,Target,${freq.toFixed(2)},0,0,${targetPos.toFixed(2)},${targetPol},5.00,`);
+        await sleep(1500);
+
+        // ===== ШАГ 2: ТОЛЬКО АЗИМУТ =====
+        setAutoStatus(`Этап 1/2: поворот по азимуту → ${corrAz.toFixed(2)}° (угол места зафиксирован ${safeEl.toFixed(2)}°)...`);
+        sendCommand(`cmd,dir,${corrAz.toFixed(2)},${safeEl.toFixed(2)},${safePol.toFixed(2)},`);
+
+        const azOk = await waitForAzimuthReached(corrAz, 1.5, 180000);
+        if (stopRequested) {
+            setAutoStatus('Прервано пользователем на этапе 1.');
+            return;
+        }
+        if (!azOk) {
+            setAutoStatus(`✗ Не удалось выйти на азимут ${corrAz.toFixed(2)}°`);
+            alert('Не удалось выйти на целевой азимут. Проверьте статус антенны.');
+            return;
+        }
+
+        // Стоп перед этапом 2
+        sendCommand('cmd,stop,');
+        await sleep(400);
+        await fetchTelemetry();
+
+        // ===== ШАГ 3: ПРЕДУПРЕЖДЕНИЕ ПЕРЕД УГЛОМ МЕСТА =====
+        const curElNow = App.currentEl;
+        const elDelta  = corrEl - curElNow;
+        let elAction;
+        if (Math.abs(elDelta) < 0.5) {
+            elAction = `угол места остаётся прежним (~${curElNow.toFixed(2)}°)`;
+        } else if (elDelta < 0) {
+            elAction = `ОПУСТИТЬ по углу места:\n  ${curElNow.toFixed(2)}° → ${corrEl.toFixed(2)}°`;
+        } else {
+            elAction = `ПОДНЯТЬ по углу места:\n  ${curElNow.toFixed(2)}° → ${corrEl.toFixed(2)}°`;
+        }
+
+        const confirmed = confirm(
+            `✓ Этап 1 завершён. Азимут ${corrAz.toFixed(2)}° достигнут.\n\n` +
+            `Этап 2: ${elAction}\n\n` +
+            `Поляризация: ${safePol.toFixed(2)}° → ${corrPol.toFixed(2)}°\n\n` +
+            `Продолжить?`
+        );
+
+        if (!confirmed) {
+            setAutoStatus(`Этап 2 отменён. Антенна остановлена на азимуте ${corrAz.toFixed(2)}°.`);
+            return;
+        }
+
+        // ===== ШАГ 4: УГОЛ МЕСТА + ПОЛЯРИЗАЦИЯ =====
+        setAutoStatus(`Этап 2/2: угол места → ${corrEl.toFixed(2)}°, поляризация → ${corrPol.toFixed(2)}°...`);
+        sendCommand(`cmd,dir,${corrAz.toFixed(2)},${corrEl.toFixed(2)},${corrPol.toFixed(2)},`);
+
+        const elOk = await waitForElevationReached(corrEl, 1.5, 180000);
+        if (stopRequested) {
+            setAutoStatus('Прервано пользователем на этапе 2.');
+            return;
+        }
+        if (!elOk) {
+            setAutoStatus(`✗ Не удалось выйти на угол места ${corrEl.toFixed(2)}°`);
+            alert('Не удалось выйти на целевой угол места.');
+            return;
+        }
+
+        setAutoStatus(`✓ Наведение на ${targetPos}° завершено. AZ=${corrAz.toFixed(2)}° EL=${corrEl.toFixed(2)}° POL=${corrPol.toFixed(2)}°`);
+    } finally {
+        pointingInProgress = false;
+    }
 }
 
 // --- Обновление UI поправок и кнопки ---
